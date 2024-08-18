@@ -1,0 +1,6 @@
+[submodule "toml11"]
+	path = toml
+	url = https://github.com/ToruNiina/toml11.git
+[submodule "LifeAPI"]
+	path = LifeAPI
+	url = git@github.com:mvr/LifeAPI.git

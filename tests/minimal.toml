@@ -1,0 +1,35 @@
+max-catalysts = 100
+first-active-range = [0, 20]
+min-stable-time = 20
+
+# pattern-center = [0, 0]
+# pattern = """
+# x = 4, y = 3, rule = LifeHistory
+# .2A$A2.A$3A!
+# """
+
+# oracle-center = [6, 0]
+# oracle = """
+# x = 13, y = 11, rule = LifeHistory
+# 7.2A$6.A2.A$6.3A4$9.2A$2.2A5.A$.A.A6.3A$.A10.A$2A!
+# """
+
+pattern-center = [0, 0]
+pattern = """
+x = 3, y = 3, rule = LifeHistory
+3A$A.A$A.A!
+"""
+
+[[catalyst]]
+rle = "2b2o$bobo$bo$2o!"
+min-recovery-time = 4
+max-recovery-time = 16
+required = "2.2D$.2DCA$.DCDC$2DC2D$D2CD$4D!"
+approach = "2.3DC$2.3DC$2.2A2D$.ADA2D$.A4D$2A!"
+
+[[catalyst]]
+rle = "2o$2o!"
+min-recovery-time = 4
+max-recovery-time = 16
+required = ".2D$ACD$ACD$.2D!"
+approach = ".3D$4D$2D2A$CD2A$4D$4D!"
