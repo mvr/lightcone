@@ -37,6 +37,8 @@ struct CatalystData {
   LifeState approachOn;
   LifeState approachOff;
   ContactType contactType; // The at the origin contact cell
+  uint64_t signature;
+  uint64_t signatureMask;
   unsigned maxRecoveryTime;
   unsigned minRecoveryTime;
 
@@ -46,6 +48,10 @@ struct CatalystData {
   CatalystData Transformed(SymmetryTransform t);
 
   LifeState CollisionMask(const CatalystData &b) const;
+
+  bool MatchesSignature(uint64_t other) const {
+    return ((signature ^ other) & signatureMask) == 0;
+  }
 };
 
 CatalystData CatalystData::FromParams(CatalystParams &params) {
@@ -77,11 +83,16 @@ CatalystData CatalystData::FromParams(CatalystParams &params) {
   result.approachOn = params.approach.marked & params.approach.state;
   result.approachOff = (params.approach.marked & ~params.approach.state) | result.state;
 
+  assert((result.approachOn & result.approachOff).IsEmpty());
+
   unsigned contactCount = result.approachOn.CountNeighbours({0, 0});
   result.contactType =
       contactCount == 1
           ? ContactType::CONTACT1
           : (contactCount == 2 ? ContactType::CONTACT2 : ContactType::CONTACTM);
+
+  result.signature = result.approachOn.GetPatch<approachRadius>({0, 0});
+  result.signatureMask = (result.approachOn | result.approachOff).GetPatch<approachRadius>({0, 0});
 
   result.minRecoveryTime = params.minRecoveryTime;
   result.maxRecoveryTime = params.maxRecoveryTime;
@@ -99,17 +110,27 @@ CatalystData CatalystData::FromParams(CatalystParams &params) {
 }
 
 CatalystData CatalystData::Transformed(SymmetryTransform t) {
-  return {state.Transformed(t),
-          halo.Transformed(t),
-          required.Transformed(t),
-          history1.Transformed(t),
-          history2.Transformed(t),
-          historyM.Transformed(t),
-          approachOn.Transformed(t),
-          approachOff.Transformed(t),
-          contactType,
-          maxRecoveryTime,
-          minRecoveryTime};
+  CatalystData result = {
+      state.Transformed(t),
+      halo.Transformed(t),
+      required.Transformed(t),
+      history1.Transformed(t),
+      history2.Transformed(t),
+      historyM.Transformed(t),
+      approachOn.Transformed(t),
+      approachOff.Transformed(t),
+      contactType,
+      signature,
+      signatureMask,
+      maxRecoveryTime,
+      minRecoveryTime,
+  };
+
+  // Needs to be recalculated
+  result.signature = result.approachOn.GetPatch<approachRadius>({0, 0});
+  result.signatureMask = (result.approachOn | result.approachOff).GetPatch<approachRadius>({0, 0});
+
+  return result;
 }
 
 std::vector<CatalystData> CatalystData::FromParamsSymmetrically(CatalystParams &params) {
@@ -493,10 +514,16 @@ std::vector<Placement> CollectPlacements(const SearchParams &params,
               ? CONTACT1
               : (currentCount2.Get(cell) ? CONTACT2 : CONTACTM);
 
+      uint64_t signature = current.GetPatch<approachRadius>(cell);
+
       for (unsigned i = 0; i < data.catalysts.size(); i++) {
         const CatalystData &catalyst = data.catalysts[i];
 
         Placement p = {cell, i};
+        if (!catalyst.MatchesSignature(signature)) {
+          search.constraints[i].knownUnplaceable.Set(cell);
+          continue;
+        }
 
         if (search.constraints[i].tried.Get(cell) || search.constraints[i].knownUnplaceable.Get(cell)) {
           continue;
