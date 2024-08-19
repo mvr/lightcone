@@ -84,7 +84,7 @@ CatalystData CatalystData::FromParams(CatalystParams &params) {
   result.state.InteractionCounts(result.history1, result.history2,
                                  result.historyM);
   result.approachOn = params.approach.marked & params.approach.state;
-  result.approachOff = (params.approach.marked & ~params.approach.state) | result.state;
+  result.approachOff = (params.approach.marked & ~params.approach.state) | result.state | (result.required & ~result.state);
 
   assert((result.approachOn & result.approachOff).IsEmpty());
 
