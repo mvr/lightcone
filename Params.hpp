@@ -47,8 +47,9 @@ CatalystParams CatalystParams::FromToml(toml::value &toml) {
   LifeHistoryState required = LifeHistoryState::Parse(requiredrle);
   LifeHistoryState approach = LifeHistoryState::Parse(approachrle);
 
-  unsigned maxRecoveryTime = toml::find<unsigned>(toml, "max-recovery-time");
-  unsigned minRecoveryTime = toml::find_or(toml, "max-recovery-time", maxRecoveryTime);
+  std::vector<int> recoveryRange = toml::find_or<std::vector<int>>(toml, "recovery-range", {0, 100});
+  unsigned minRecoveryTime = recoveryRange[0];
+  unsigned maxRecoveryTime = recoveryRange[1];
 
   return {state, required, approach, std::vector<LifeState>(), minRecoveryTime, maxRecoveryTime};
 }

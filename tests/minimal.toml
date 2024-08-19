@@ -22,14 +22,12 @@ x = 3, y = 3, rule = LifeHistory
 
 [[catalyst]]
 rle = "2b2o$bobo$bo$2o!"
-min-recovery-time = 4
-max-recovery-time = 16
+recovery-range = [4, 16]
 required = "2.2D$.2DCA$.DCDC$2DC2D$D2CD$4D!"
 approach = "2.3DC$2.3DC$2.2A2D$.ADA2D$.A4D$2A!"
 
 [[catalyst]]
 rle = "2o$2o!"
-min-recovery-time = 4
-max-recovery-time = 16
+recovery-range = [4, 16]
 required = ".2D$ACD$ACD$.2D!"
 approach = ".3D$4D$2D2A$CD2A$4D$4D!"
