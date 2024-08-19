@@ -57,13 +57,16 @@ struct CatalystData {
 CatalystData CatalystData::FromParams(CatalystParams &params) {
   LifeState contact;
   {
-    LifeState withCatalyst = params.approach.state;
-    withCatalyst.Step();
+    LifeState catalyst = params.approach.state & ~params.approach.marked;
 
-    LifeState withoutCatalyst = params.approach.state & params.approach.marked;
-    withoutCatalyst.Step();
+    LifeState reactionWithCatalyst = params.approach.state;
+    reactionWithCatalyst.Step();
+    reactionWithCatalyst &= ~catalyst;
 
-    contact = withCatalyst ^ withoutCatalyst;
+    LifeState reactionWithoutCatalyst = params.approach.state & params.approach.marked;
+    reactionWithoutCatalyst.Step();
+
+    contact = reactionWithCatalyst ^ reactionWithoutCatalyst;
   }
 
   auto contactorigin = contact.FirstOn();
@@ -101,7 +104,8 @@ CatalystData CatalystData::FromParams(CatalystParams &params) {
     std::cout << "Loaded catalyst: " << result.state << std::endl;
     // std::cout << "Params Approach: " << params.approach << std::endl;
     // std::cout << "Params Required: " << params.required << std::endl;
-    std::cout << "Approach: " << LifeHistoryState(result.state | result.approachOn, LifeState(), result.approachOn | result.approachOff) << std::endl;
+    std::cout << "Approach On: " << LifeHistoryState(result.state, LifeState(), result.approachOn) << std::endl;
+    std::cout << "Approach Off: " << LifeHistoryState(result.state, LifeState(), result.approachOff) << std::endl;
     std::cout << "Required: " << LifeHistoryState(result.state, LifeState(), result.required) << std::endl;
     std::cout << "Contact Type: " << result.contactType << std::endl;
   }
