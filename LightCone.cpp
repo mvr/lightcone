@@ -665,8 +665,6 @@ void RunSearch(const SearchParams &params, const SearchData &data,
 
   if constexpr (debug) std::cout << "Starting node: " << search.lookahead.state << std::endl;
 
-  TryAdvance(params, data, search);
-
   Problem problem = DetermineProblem(params, data, search.config, search.lookahead);
 
   if constexpr (print_progress) {
@@ -706,6 +704,8 @@ void RunSearch(const SearchParams &params, const SearchData &data,
 
   if (search.config.numCatalysts == params.maxCatalysts)
     return;
+
+  TryAdvance(params, data, search);
 
   std::vector<Placement> placements =
       CollectPlacements(params, data, search, problem);
