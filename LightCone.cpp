@@ -44,6 +44,8 @@ struct CatalystData {
   static std::vector<CatalystData> FromParamsSymmetrically(CatalystParams &params);
 
   CatalystData Transformed(SymmetryTransform t);
+
+  LifeState CollisionMask(const CatalystData &b) const;
 };
 
 CatalystData CatalystData::FromParams(CatalystParams &params) {
@@ -70,8 +72,8 @@ CatalystData CatalystData::FromParams(CatalystParams &params) {
   result.state = params.state;
   result.halo = params.state.ZOI() & ~params.state;
   result.required = params.required.marked;
-  result.state.CountNeighbourhoodInteraction(result.history1, result.history2,
-                                             result.historyM);
+  result.state.InteractionCounts(result.history1, result.history2,
+                                 result.historyM);
   result.approachOn = params.approach.marked & params.approach.state;
   result.approachOff = (params.approach.marked & ~params.approach.state) | result.state;
 
@@ -125,9 +127,14 @@ std::vector<CatalystData> CatalystData::FromParamsSymmetrically(CatalystParams &
   return result;
 }
 
+LifeState CatalystData::CollisionMask(const CatalystData &b) const {
+  return state.InteractionOffsets(b.state);
+}
+
 // Any precomputed data, constant at every node
 struct SearchData {
   std::vector<CatalystData> catalysts;
+  std::vector<LifeState> collisionMasks;
 };
 
 
@@ -311,7 +318,7 @@ struct SearchNode {
     config.state = params.state.state;
     lookahead.state = params.state.state;
 
-    config.state.CountNeighbourhoodInteraction(history1, history2,
+    config.state.InteractionCounts(history1, history2,
                                              historyM);
     constraints = std::vector<CatalystConstraints>(data.catalysts.size(),
                                                    CatalystConstraints());
@@ -338,7 +345,7 @@ void BlockIncorrectContacts(const SearchParams &params, const SearchData &data,
                             SearchNode &search, LifeState state) {
   LifeState currentCount1(UNINITIALIZED), currentCount2(UNINITIALIZED),
       currentCountM(UNINITIALIZED);
-  state.CountNeighbourhoodInteraction(currentCount1, currentCount2,
+  state.InteractionCounts(currentCount1, currentCount2,
                                       currentCountM);
   for (unsigned i = 0; i < data.catalysts.size(); i++) {
     switch (data.catalysts[i].contactType) {
@@ -364,7 +371,7 @@ void TryAdvance(const SearchParams &params, const SearchData &data,
 
     LifeState currentCount1(UNINITIALIZED), currentCount2(UNINITIALIZED),
         currentCountM(UNINITIALIZED);
-    search.lookahead.state.CountNeighbourhoodInteraction(
+    search.lookahead.state.InteractionCounts(
         currentCount1, currentCount2, currentCountM);
     LifeState newContactPoints = (currentCount1 & ~search.history1) |
                                  (currentCount2 & ~search.history2) |
@@ -467,7 +474,7 @@ std::vector<Placement> CollectPlacements(const SearchParams &params,
 
     LifeState currentCount1(UNINITIALIZED), currentCount2(UNINITIALIZED),
         currentCountM(UNINITIALIZED);
-    current.CountNeighbourhoodInteraction(currentCount1, currentCount2,
+    current.InteractionCounts(currentCount1, currentCount2,
                                           currentCountM);
     LifeState newContactPoints = (currentCount1 & ~currentHistory1) |
                                  (currentCount2 & ~currentHistory2) |
@@ -562,6 +569,10 @@ void MakePlacement(const SearchParams &params, const SearchData &data,
   search.history1 |= catalystdata.history1.Moved(placement.pos);
   search.history2 |= catalystdata.history2.Moved(placement.pos);
   search.historyM |= catalystdata.historyM.Moved(placement.pos);
+
+  for (unsigned t = 0; t < data.catalysts.size(); t++) {
+    search.constraints[t].tried |= data.collisionMasks[placement.catalystIx * data.catalysts.size() + t].Moved(placement.pos.first, placement.pos.second);
+  }
 }
 
 void ResetLightcone(const SearchParams &params, const SearchData &data,
@@ -676,6 +687,17 @@ void RunSearch(const SearchParams &params, const SearchData &data,
   }
 }
 
+std::vector<LifeState> CalculateCollisionMasks(const std::vector<CatalystData> &catalysts) {
+  unsigned count = catalysts.size();
+  std::vector<LifeState> result(count*count);
+  for (unsigned s = 0; s < count; s++) {
+      for (unsigned t = 0; t < count; t++) {
+        result[s * count + t] = catalysts[s].CollisionMask(catalysts[t]);
+      }
+  }
+  return result;
+}
+
 int main(int, char *argv[]) {
   auto toml = toml::parse(argv[1]);
   SearchParams params = SearchParams::FromToml(toml);
@@ -686,7 +708,9 @@ int main(int, char *argv[]) {
     catalystdata.insert(catalystdata.end(), newdata.begin(), newdata.end()); // Why is C++ like this
   }
 
-  SearchData data = {catalystdata};
+  std::vector<LifeState> masks = CalculateCollisionMasks(catalystdata);
+
+  SearchData data = {catalystdata, masks};
 
   SearchNode search(params, data);
 
