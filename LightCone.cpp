@@ -36,7 +36,7 @@ struct CatalystData {
   LifeState historyM;
   LifeState approachOn;
   LifeState approachOff;
-  ContactType contactType; // The at the origin contact cell
+  ContactType contactType; // At the origin contact cell
   uint64_t signature;
   uint64_t signatureMask;
   unsigned maxRecoveryTime;
@@ -359,12 +359,6 @@ struct ContactEnvelope {
   LifeState firstActiveM;
 };
 
-// ContactEnvelope CalculateContactEnvelope(SearchParams &params, SearchNode &state) {
-// }
-
-// void SearchNode::Step(const SearchParams &params, const SearchData &data) {
-// }
-
 // Wait, do we want to do this? A cell could e.g. be history1 and then history2 later
 void BlockIncorrectContacts(const SearchParams &params, const SearchData &data,
                             SearchNode &search, LifeState state) {
@@ -435,7 +429,7 @@ void TryAdvance(const SearchParams &params, const SearchData &data,
 
 enum struct PlacementValidity {
   VALID,
-  INVALID_CONTACT,
+  INVALID_CONTACT, // Wrong number of active neighbours
   FAILED_CONTACT,  // Invalid within `approachRadius` of the origin
   FAILED_ELSEWHERE // Invalid outside that, so will need to be re-checked
 };
@@ -443,9 +437,9 @@ enum struct PlacementValidity {
 std::ostream& operator<<(std::ostream& out, const PlacementValidity value){
   return out << [value]() {
     switch (value) {
-    case PlacementValidity::VALID: return "VALID";
-    case PlacementValidity::INVALID_CONTACT: return "INVALID_CONTACT";
-    case PlacementValidity::FAILED_CONTACT: return "FAILED_CONTACT";
+    case PlacementValidity::VALID:            return "VALID";
+    case PlacementValidity::INVALID_CONTACT:  return "INVALID_CONTACT";
+    case PlacementValidity::FAILED_CONTACT:   return "FAILED_CONTACT";
     case PlacementValidity::FAILED_ELSEWHERE: return "FAILED_ELSEWHERE";
     }
   }();
@@ -509,9 +503,8 @@ std::vector<Placement> CollectPlacements(const SearchParams &params,
 
     if constexpr (debug) std::cout << "Gen " << g << " contactPoints: " << newContactPoints << std::endl;
 
-    LifeState remainingCells = newContactPoints;
-    for (auto cell = remainingCells.FirstOn(); cell != std::make_pair(-1, -1);
-         remainingCells.Erase(cell), cell = remainingCells.FirstOn()) {
+    for (auto cell = newContactPoints.FirstOn(); cell != std::make_pair(-1, -1);
+         newContactPoints.Erase(cell), cell = newContactPoints.FirstOn()) {
 
       ContactType contactType =
           currentCount1.Get(cell)
@@ -550,9 +543,7 @@ std::vector<Placement> CollectPlacements(const SearchParams &params,
           search.constraints[i].knownUnplaceable.Set(cell);
           break;
         case PlacementValidity::FAILED_ELSEWHERE:
-          break;
         case PlacementValidity::INVALID_CONTACT:
-          // Might interact correctly in a future generation
           break;
         }
       }
