@@ -347,7 +347,12 @@ struct SearchNode {
                                              historyM);
     constraints = std::vector<CatalystConstraints>(data.catalysts.size(),
                                                    CatalystConstraints());
-    // TODO: restrict locations catalysts can be placed
+
+    if (!params.state.history.IsEmpty()) {
+      for (unsigned i = 0; i < data.catalysts.size(); i++) {
+        constraints[i].tried |= data.catalysts[i].state.Transformed(SymmetryTransform::Rotate180OddBoth).Convolve(~params.state.history);
+      }
+    }
   }
 
   void Step(const SearchParams &params, const SearchData &data);
