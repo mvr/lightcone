@@ -447,13 +447,18 @@ std::ostream& operator<<(std::ostream& out, const PlacementValidity value){
 
 PlacementValidity TestPlacement(const SearchData &data, SearchNode &search,
                                 const LifeState &state, Placement p,
-                                ContactType contactType) {
+                                ContactType contactType, uint64_t signature,
+                                const LifeState &currentCount1,
+                                const LifeState &currentCount2) {
   const CatalystData &catalyst = data.catalysts[p.catalystIx];
 
   // Check that the type of catalyst contact matches the
   // active pattern neighbour count for an contact to occur
   if (catalyst.contactType != contactType)
     return PlacementValidity::INVALID_CONTACT;
+
+  if (!catalyst.MatchesSignature(signature))
+    return PlacementValidity::FAILED_CONTACT;
 
   LifeState mismatches = (catalyst.approachOn.Moved(p.pos) & ~state) |
                          (catalyst.approachOff.Moved(p.pos) & state);
@@ -467,6 +472,11 @@ PlacementValidity TestPlacement(const SearchData &data, SearchNode &search,
       return PlacementValidity::FAILED_CONTACT;
     }
   }
+
+  LifeState immediatebirths = (catalyst.history1.Moved(p.pos) & currentCount2) | (catalyst.history2.Moved(p.pos) & currentCount1);
+  immediatebirths &= (catalyst.required & ~catalyst.state).Moved(p.pos);
+  if (!immediatebirths.IsEmpty())
+    return PlacementValidity::FAILED_ELSEWHERE;
 
   return PlacementValidity::VALID;
 }
@@ -516,7 +526,9 @@ std::vector<Placement> CollectPlacements(const SearchParams &params,
       for (unsigned i = 0; i < data.catalysts.size(); i++) {
         const CatalystData &catalyst = data.catalysts[i];
 
-        Placement p = {cell, i};
+        if (catalyst.contactType != contactType)
+          continue;
+
         if (!catalyst.MatchesSignature(signature)) {
           search.constraints[i].knownUnplaceable.Set(cell);
           continue;
@@ -526,13 +538,15 @@ std::vector<Placement> CollectPlacements(const SearchParams &params,
           continue;
         }
 
+        Placement p = {cell, i};
+
         if (catalyst.contactType == contactType && search.constraints[i].knownPlaceable.Get(cell)) {
           result.push_back(p);
           continue;
         }
 
         PlacementValidity validity =
-            TestPlacement(data, search, current, p, contactType);
+          TestPlacement(data, search, current, p, contactType, signature, currentCount1, currentCount2);
 
         switch (validity) {
         case PlacementValidity::VALID:
