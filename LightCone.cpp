@@ -317,20 +317,6 @@ LifeState Problem::LightCone(unsigned currentgen) {
   }
 }
 
-Problem DetermineProblem(const SearchParams &params, const SearchData &data,
-                         const Configuration &config, const Lookahead &start) {
-  Lookahead lookahead = start;
-
-  while (true) {
-    Problem problem = lookahead.Problem(params, data, config);
-
-    if (problem.type != ProblemType::NONE)
-        return problem;
-
-    lookahead.Step(config);
-  }
-}
-
 // mvrnote: name?
 // Arranged so 0 -> 1 is increasing information
 struct CatalystConstraints {
@@ -403,9 +389,14 @@ void BlockIncorrectContacts(const SearchParams &params, const SearchData &data,
 
 // TODO: determine exactly when this needs to be run.
 // Is it after the final perturbation?
-void TryAdvance(const SearchParams &params, const SearchData &data,
-                SearchNode &search) {
+Problem TryAdvance(const SearchParams &params, const SearchData &data,
+                const Configuration &config, SearchNode &search) {
   while (true) {
+    Problem problem = search.lookahead.Problem(params, data, config);
+
+    if (problem.type != ProblemType::NONE)
+        return problem;
+
     if constexpr (debug) std::cout << "Trying to advance: " << search.lookahead.state << std::endl;
 
     LifeState currentCount1(UNINITIALIZED), currentCount2(UNINITIALIZED),
@@ -444,6 +435,19 @@ void TryAdvance(const SearchParams &params, const SearchData &data,
     } else {
       break;
     }
+  }
+
+  // We can't advance the state any more, but we still need to find the future
+  // problem.
+  Lookahead lookahead = search.lookahead;
+
+  while (true) {
+    Problem problem = lookahead.Problem(params, data, config);
+
+    if (problem.type != ProblemType::NONE)
+        return problem;
+
+    lookahead.Step(config);
   }
 }
 
@@ -690,7 +694,7 @@ void RunSearch(const SearchParams &params, const SearchData &data,
 
   if constexpr (debug) std::cout << "Starting node: " << search.lookahead.state << std::endl;
 
-  Problem problem = DetermineProblem(params, data, search.config, search.lookahead);
+  Problem problem = TryAdvance(params, data, search.config, search);
 
   if constexpr (print_progress) {
     static unsigned counter = 0;
@@ -729,8 +733,6 @@ void RunSearch(const SearchParams &params, const SearchData &data,
 
   if (search.config.numCatalysts == params.maxCatalysts)
     return;
-
-  TryAdvance(params, data, search);
 
   std::vector<Placement> placements =
       CollectPlacements(params, data, search, problem);
