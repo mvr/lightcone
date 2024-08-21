@@ -190,6 +190,36 @@ struct Configuration {
         placements{}, targets{} {}
 };
 
+enum struct ProblemType {
+  NONE,
+  WINNER,
+  REQUIRED,
+  FILTER,
+  UNRECOVERED,
+  NO_REACTION,
+};
+
+std::ostream& operator<<(std::ostream& out, const ProblemType value){
+  return out << [value]() {
+    switch (value) {
+    case ProblemType::NONE:        return "NONE";
+    case ProblemType::WINNER:      return "WINNER";
+    case ProblemType::REQUIRED:    return "REQUIRED";
+    case ProblemType::FILTER:      return "FILTER";
+    case ProblemType::UNRECOVERED: return "UNRECOVERED";
+    case ProblemType::NO_REACTION: return "NO_REACTION";
+    }
+  }();
+}
+
+struct Problem {
+  std::pair<int, int> cell;
+  unsigned gen;
+  ProblemType type;
+
+  LifeState LightCone(unsigned gen);
+};
+
 // The state of a configuration after stepping
 struct Lookahead {
   LifeState state;
@@ -204,6 +234,8 @@ struct Lookahead {
         missingTime{}, recoveredTime{0} {}
 
   void Step(const Configuration &config);
+  Problem Problem(const SearchParams &params, const SearchData &data,
+                  const Configuration &config) const;
 };
 
 void Lookahead::Step(const Configuration &config) {
@@ -227,33 +259,43 @@ void Lookahead::Step(const Configuration &config) {
   recoveredTime = allPresent ? (recoveredTime + 1) : 0;
 }
 
-enum struct ProblemType {
-  NONE,
-  REQUIRED,
-  FILTER,
-  UNRECOVERED,
-  NO_REACTION,
-};
-
-std::ostream& operator<<(std::ostream& out, const ProblemType value){
-  return out << [value]() {
-    switch (value) {
-    case ProblemType::NONE:        return "NONE";
-    case ProblemType::REQUIRED:    return "REQUIRED";
-    case ProblemType::FILTER:      return "FILTER";
-    case ProblemType::UNRECOVERED: return "UNRECOVERED";
-    case ProblemType::NO_REACTION: return "NO_REACTION";
+Problem Lookahead::Problem(const SearchParams &params, const SearchData &data,
+                         const Configuration &config) const {
+    {
+      LifeState requiredViolations =
+          config.required &
+          (state ^ config.catalysts);
+      std::pair<int, int> cell = requiredViolations.FirstOn();
+      if (cell != std::make_pair(-1, -1))
+        return {cell, gen, ProblemType::REQUIRED};
     }
-  }();
+
+    {
+      for (unsigned i = 0; i < config.numCatalysts; i++) {
+        if (missingTime[i] > data.catalysts[config.placements[i].catalystIx].maxRecoveryTime) {
+          const LifeTarget &target = config.targets[i];
+          std::pair<int, int> cell =
+              (target.wanted & ~state).FirstOn();
+          if (cell.first == -1 && cell.second == -1)
+            cell = (target.unwanted & state).FirstOn();
+          return {cell, gen, ProblemType::UNRECOVERED};
+        }
+      }
+    }
+
+    {
+      if (gen > params.maxFirstActiveGen && !hasInteracted)
+        return {{-1, -1}, gen, ProblemType::NO_REACTION};
+    }
+
+    {
+      if (gen > params.minFirstActiveGen && hasInteracted && recoveredTime > params.minStableTime) {
+        return {{-1, -1}, 0, ProblemType::WINNER};
+      }
+    }
+
+    return {{-1, -1}, 0, ProblemType::NONE};
 }
-
-struct Problem {
-  std::pair<int, int> cell;
-  unsigned gen;
-  ProblemType type;
-
-  LifeState LightCone(unsigned gen);
-};
 
 std::ostream& operator<<(std::ostream& out, const Problem value){
   return out << value.type << " on gen " << value.gen << " at (" << value.cell.first << ", " << value.cell.second << ")";
@@ -270,6 +312,7 @@ LifeState Problem::LightCone(unsigned currentgen) {
   case ProblemType::NO_REACTION:
     return ~LifeState();
   case ProblemType::NONE:
+  case ProblemType::WINNER:
     __builtin_unreachable();
   }
 }
@@ -279,38 +322,10 @@ Problem DetermineProblem(const SearchParams &params, const SearchData &data,
   Lookahead lookahead = start;
 
   while (true) {
-    {
-      LifeState requiredViolations =
-          config.required &
-          (lookahead.state ^ config.catalysts);
-      std::pair<int, int> cell = requiredViolations.FirstOn();
-      if (cell != std::make_pair(-1, -1))
-        return {cell, lookahead.gen, ProblemType::REQUIRED};
-    }
+    Problem problem = lookahead.Problem(params, data, config);
 
-    {
-      for (unsigned i = 0; i < config.numCatalysts; i++) {
-        if (lookahead.missingTime[i] > data.catalysts[config.placements[i].catalystIx].maxRecoveryTime) {
-          const LifeTarget &target = config.targets[i];
-          std::pair<int, int> cell =
-              (target.wanted & ~lookahead.state).FirstOn();
-          if (cell.first == -1 && cell.second == -1)
-            cell = (target.unwanted & lookahead.state).FirstOn();
-          return {cell, lookahead.gen, ProblemType::UNRECOVERED};
-        }
-      }
-    }
-
-    {
-      if (lookahead.gen > params.maxFirstActiveGen && !lookahead.hasInteracted)
-        return {{-1, -1}, lookahead.gen, ProblemType::NO_REACTION};
-    }
-
-    {
-      if (lookahead.gen > params.minFirstActiveGen && lookahead.hasInteracted && lookahead.recoveredTime > params.minStableTime) {
-        return {{-1, -1}, 0, ProblemType::NONE};
-      }
-    }
+    if (problem.type != ProblemType::NONE)
+        return problem;
 
     lookahead.Step(config);
   }
@@ -700,7 +715,7 @@ void RunSearch(const SearchParams &params, const SearchData &data,
 
   if constexpr (debug) std::cout << "Problem: " << problem << std::endl;
 
-  if (problem.type == ProblemType::NONE) {
+  if (problem.type == ProblemType::WINNER) {
     // TODO report properly!
     std::cout << "Winner: " << search.config.state << std::endl;
     if constexpr (debug) {
