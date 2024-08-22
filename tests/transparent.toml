@@ -1,0 +1,37 @@
+max-catalysts = 100
+first-active-range = [2, 20]
+min-stable-time = 100
+
+max-transparent = 1
+
+pattern-center = [0, 0]
+pattern = """
+x = 3, y = 3, rule = LifeHistory
+3A$A.A$A.A!
+"""
+
+[[catalyst]]
+rle = "2b2o$bobo$bo$2o!"
+recovery-range = [4, 16]
+required = "2.2D$.2DCA$.DCDC$2DC2D$D2CD$4D!"
+approach = "2.3DC$2.3DC$2.2A2D$.ADA2D$.A4D$2A!"
+
+[[catalyst]]
+rle = "2o$2o!"
+recovery-range = [4, 30]
+transparent = true
+
+# [[catalyst]]
+# rle = "b2o$o2bo$b2o!"
+# recovery-range = [4, 30]
+# transparent = true
+
+# [[catalyst]]
+# rle = "b2o$obo$bo!"
+# recovery-range = [4, 30]
+# transparent = true
+
+# [[catalyst]]
+# rle = "2b2o$bobo$obo$bo!"
+# recovery-range = [4, 30]
+# transparent = true

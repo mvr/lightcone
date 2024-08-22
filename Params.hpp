@@ -35,23 +35,35 @@ struct CatalystParams {
   unsigned minRecoveryTime;
   unsigned maxRecoveryTime;
 
+  bool transparent;
+
   static CatalystParams FromToml(toml::value &toml);
 };
 
 CatalystParams CatalystParams::FromToml(toml::value &toml) {
   std::string rle = toml::find<std::string>(toml, "rle");
-  std::string requiredrle = toml::find<std::string>(toml, "required");
-  std::string approachrle = toml::find<std::string>(toml, "approach");
-
   LifeState state = LifeState::Parse(rle);
-  LifeHistoryState required = LifeHistoryState::Parse(requiredrle);
-  LifeHistoryState approach = LifeHistoryState::Parse(approachrle);
+
+  bool transparent = toml::find_or(toml, "transparent", false);
+
+  LifeHistoryState required;
+  LifeHistoryState approach;
+
+  if (!transparent) {
+    // Not required if the catalyst is transparent
+    std::string requiredrle = toml::find<std::string>(toml, "required");
+    std::string approachrle = toml::find<std::string>(toml, "approach");
+
+    required = LifeHistoryState::Parse(requiredrle);
+    approach = LifeHistoryState::Parse(approachrle);
+  }
 
   std::vector<int> recoveryRange = toml::find_or<std::vector<int>>(toml, "recovery-range", {0, 100});
   unsigned minRecoveryTime = recoveryRange[0];
   unsigned maxRecoveryTime = recoveryRange[1];
 
-  return {state, required, approach, std::vector<LifeState>(), minRecoveryTime, maxRecoveryTime};
+  return {state, required, approach, std::vector<LifeState>(),
+      minRecoveryTime, maxRecoveryTime, transparent};
 }
 
 
@@ -68,6 +80,7 @@ struct SearchParams {
   unsigned maxActiveWindowGens;
 
   LifeHistoryState state;
+  unsigned maxTransparent;
 
   bool hasFilter;
   std::vector<Filter> filters;
@@ -88,6 +101,7 @@ SearchParams SearchParams::FromToml(toml::value &toml) {
   SearchParams params;
 
   params.maxCatalysts = toml::find_or(toml, "max-catalysts", 3);
+  params.maxTransparent = toml::find_or(toml, "max-transparent", 0);
   params.minStableTime = toml::find_or(toml, "min-stable-time", 8);
 
   std::vector<int> firstRange = toml::find_or<std::vector<int>>(toml, "first-active-range", {0, 100});

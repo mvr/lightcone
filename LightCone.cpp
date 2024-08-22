@@ -15,6 +15,7 @@ enum ContactType {
   CONTACT1,
   CONTACT2,
   CONTACTM,
+  TRANSPARENT,
 };
 
 std::ostream& operator<<(std::ostream& out, const ContactType value){
@@ -23,6 +24,7 @@ std::ostream& operator<<(std::ostream& out, const ContactType value){
     case ContactType::CONTACT1: return "CONTACT1";
     case ContactType::CONTACT2: return "CONTACT2";
     case ContactType::CONTACTM: return "CONTACTM";
+    case ContactType::TRANSPARENT: return "TRANSPARENT";
     }
   }();
 }
@@ -36,14 +38,19 @@ struct CatalystData {
   LifeState historyM;
   LifeState approachOn;
   LifeState approachOff;
+  LifeState historyFlipped1;
+  LifeState historyFlipped2;
+  LifeState historyFlippedM;
   ContactType contactType; // At the origin contact cell
   uint64_t signature;
   uint64_t signatureMask;
   unsigned maxRecoveryTime;
   unsigned minRecoveryTime;
+  bool transparent;
 
-  static CatalystData FromParams(CatalystParams &params);
-  static std::vector<CatalystData> FromParamsSymmetrically(CatalystParams &params);
+  static CatalystData FromParamsNormal(CatalystParams &params);
+  static CatalystData FromParamsTransparent(CatalystParams &params);
+  static std::vector<CatalystData> FromParams(CatalystParams &params);
 
   CatalystData Transformed(SymmetryTransform t);
 
@@ -54,7 +61,7 @@ struct CatalystData {
   }
 };
 
-CatalystData CatalystData::FromParams(CatalystParams &params) {
+CatalystData CatalystData::FromParamsNormal(CatalystParams &params) {
   LifeState contact;
   {
     LifeState catalyst = params.approach.state & ~params.approach.marked;
@@ -83,6 +90,9 @@ CatalystData CatalystData::FromParams(CatalystParams &params) {
   result.required = params.required.marked;
   result.state.InteractionCounts(result.history1, result.history2,
                                  result.historyM);
+  result.historyFlipped1 = result.history1.Transformed(SymmetryTransform::Rotate180OddBoth);
+  result.historyFlipped2 = result.history2.Transformed(SymmetryTransform::Rotate180OddBoth);
+  result.historyFlippedM = result.historyM.Transformed(SymmetryTransform::Rotate180OddBoth);
   result.approachOn = params.approach.marked & params.approach.state;
   result.approachOff = (params.approach.marked & ~params.approach.state) | result.state | (result.required & ~result.state);
 
@@ -100,6 +110,8 @@ CatalystData CatalystData::FromParams(CatalystParams &params) {
   result.minRecoveryTime = params.minRecoveryTime;
   result.maxRecoveryTime = params.maxRecoveryTime;
 
+  result.transparent = false;
+
   if constexpr (debug) {
     std::cout << "Loaded catalyst: " << result.state << std::endl;
     // std::cout << "Params Approach: " << params.approach << std::endl;
@@ -113,21 +125,57 @@ CatalystData CatalystData::FromParams(CatalystParams &params) {
   return result;
 }
 
+CatalystData CatalystData::FromParamsTransparent(CatalystParams &params) {
+  CatalystData result;
+
+  result.state = params.state;
+  result.halo = params.state.ZOI() & ~params.state;
+  result.required = LifeState();
+
+  result.state.InteractionCounts(result.history1, result.history2, result.historyM);
+  result.historyFlipped1 = result.history1.Transformed(SymmetryTransform::Rotate180OddBoth);
+  result.historyFlipped2 = result.history2.Transformed(SymmetryTransform::Rotate180OddBoth);
+  result.historyFlippedM = result.historyM.Transformed(SymmetryTransform::Rotate180OddBoth);
+
+  result.approachOn = LifeState();
+  result.approachOff = LifeState();
+
+  result.contactType = ContactType::TRANSPARENT;
+
+  result.signature = 0;
+  result.signatureMask = 0;
+
+  result.minRecoveryTime = params.minRecoveryTime;
+  result.maxRecoveryTime = params.maxRecoveryTime;
+
+  result.transparent = true;
+
+  if constexpr (debug) {
+    std::cout << "Loaded transparent catalyst: " << result.state << std::endl;
+  }
+
+  return result;
+}
+
 CatalystData CatalystData::Transformed(SymmetryTransform t) {
   CatalystData result = {
-      state.Transformed(t),
-      halo.Transformed(t),
-      required.Transformed(t),
-      history1.Transformed(t),
-      history2.Transformed(t),
-      historyM.Transformed(t),
-      approachOn.Transformed(t),
-      approachOff.Transformed(t),
-      contactType,
-      signature,
-      signatureMask,
-      maxRecoveryTime,
-      minRecoveryTime,
+    state.Transformed(t),
+    halo.Transformed(t),
+    required.Transformed(t),
+    history1.Transformed(t),
+    history2.Transformed(t),
+    historyM.Transformed(t),
+    approachOn.Transformed(t),
+    approachOff.Transformed(t),
+    historyFlipped1.Transformed(t),
+    historyFlipped2.Transformed(t),
+    historyFlippedM.Transformed(t),
+    contactType,
+    signature,
+    signatureMask,
+    maxRecoveryTime,
+    minRecoveryTime,
+    transparent
   };
 
   // Needs to be recalculated
@@ -137,8 +185,18 @@ CatalystData CatalystData::Transformed(SymmetryTransform t) {
   return result;
 }
 
-std::vector<CatalystData> CatalystData::FromParamsSymmetrically(CatalystParams &params) {
-  CatalystData data = CatalystData::FromParams(params);
+std::vector<CatalystData> CatalystData::FromParams(CatalystParams &params) {
+  if (params.transparent) {
+    CatalystData data = CatalystData::FromParamsTransparent(params);
+
+    std::vector<CatalystData> result;
+    for (auto t : params.state.SymmetryOrbitRepresentatives()) {
+      result.push_back(data.Transformed(t));
+    }
+    return result;
+  }
+
+  CatalystData data = CatalystData::FromParamsNormal(params);
   std::vector<CatalystData> result;
 
   // TODO: use the actual symmetry of the catalyst
@@ -181,12 +239,13 @@ struct Configuration {
   LifeState required;
 
   unsigned numCatalysts;
+  unsigned numTransparent;
 
   std::vector<Placement> placements;
   std::vector<LifeTarget> targets; // Pre-shifted catalysts
 
   Configuration()
-      : state{}, catalysts{}, required{}, numCatalysts{0},
+      : state{}, catalysts{}, required{}, numCatalysts{0}, numTransparent{0},
         placements{}, targets{} {}
 };
 
@@ -197,6 +256,7 @@ enum struct ProblemType {
   FILTER,
   UNRECOVERED,
   NO_REACTION,
+  NOT_TRANSPARENT,
 };
 
 std::ostream& operator<<(std::ostream& out, const ProblemType value){
@@ -208,6 +268,7 @@ std::ostream& operator<<(std::ostream& out, const ProblemType value){
     case ProblemType::FILTER:      return "FILTER";
     case ProblemType::UNRECOVERED: return "UNRECOVERED";
     case ProblemType::NO_REACTION: return "NO_REACTION";
+    case ProblemType::NOT_TRANSPARENT: return "NOT_TRANSPARENT";
     }
   }();
 }
@@ -223,15 +284,17 @@ struct Problem {
 // The state of a configuration after stepping
 struct Lookahead {
   LifeState state;
+  LifeState everActive;
 
   unsigned gen;
   bool hasInteracted;
   std::vector<unsigned> missingTime;
+  std::vector<bool> catalystHasInteracted;
   unsigned recoveredTime;
 
   Lookahead()
-      : state{}, gen{0}, hasInteracted{false},
-        missingTime{}, recoveredTime{0} {}
+      : state{}, everActive{}, gen{0}, hasInteracted{false}, missingTime{},
+        catalystHasInteracted{}, recoveredTime{0} {}
 
   void Step(const Configuration &config);
   Problem Problem(const SearchParams &params, const SearchData &data,
@@ -241,6 +304,7 @@ struct Lookahead {
 void Lookahead::Step(const Configuration &config) {
   state.Step();
   gen++;
+  everActive |= state ^ config.state;
 
   // Why is there no easy way to iterate with index? My kingdom for a `zip`
   unsigned i = 0;
@@ -250,6 +314,7 @@ void Lookahead::Step(const Configuration &config) {
       missingTime[i] = 0;
     } else {
       missingTime[i]++;
+      catalystHasInteracted[i] = true;
       hasInteracted = true;
       allPresent = false;
     }
@@ -284,6 +349,21 @@ Problem Lookahead::Problem(const SearchParams &params, const SearchData &data,
     }
 
     {
+      for (unsigned i = 0; i < config.numCatalysts; i++) {
+        if (!data.catalysts[config.placements[i].catalystIx].transparent)
+          continue;
+
+        if(catalystHasInteracted[i] && missingTime[i] == 0) {
+          LifeState nonTransparentCells = config.targets[i].wanted & ~everActive;
+
+          std::pair<int, int> cell = nonTransparentCells.FirstOn();
+          if (cell.first != -1 && cell.second != -1)
+            return {cell, gen, ProblemType::NOT_TRANSPARENT};
+        }
+      }
+    }
+
+    {
       if (gen > params.maxFirstActiveGen && !hasInteracted)
         return {{-1, -1}, gen, ProblemType::NO_REACTION};
     }
@@ -308,6 +388,7 @@ LifeState Problem::LightCone(unsigned currentgen) {
   case ProblemType::REQUIRED:
   case ProblemType::FILTER:
   case ProblemType::UNRECOVERED:
+  case ProblemType::NOT_TRANSPARENT:
     return LifeState::NZOIAround(cell, gen - currentgen);
   case ProblemType::NO_REACTION:
     return ~LifeState();
@@ -503,6 +584,7 @@ std::vector<Placement> CollectPlacements(const SearchParams &params,
 
       uint64_t signature = current.GetPatch<approachRadius>(cell);
 
+      // Handle ordinary catalysts
       for (unsigned i = 0; i < data.catalysts.size(); i++) {
         const CatalystData &catalyst = data.catalysts[i];
 
@@ -541,6 +623,27 @@ std::vector<Placement> CollectPlacements(const SearchParams &params,
           break;
         }
       }
+
+      // Handle transparent catalysts
+      if (search.config.numTransparent < params.maxTransparent) {
+        LifeState newHistory1 = currentHistory1 & newContactPoints;
+        LifeState newHistory2 = currentHistory2 & newContactPoints;
+        for (unsigned i = 0; i < data.catalysts.size(); i++) {
+          const CatalystData &catalyst = data.catalysts[i];
+          if (catalyst.contactType != ContactType::TRANSPARENT)
+            continue;
+
+          LifeState newContactPoints = catalyst.historyFlipped1.Convolve(newHistory2) |
+                                       catalyst.historyFlipped2.Convolve(newHistory1);
+          newContactPoints &= ~search.constraints[i].tried;
+
+          for (auto cell = newContactPoints.FirstOn(); cell != std::make_pair(-1, -1);
+               newContactPoints.Erase(cell), cell = newContactPoints.FirstOn()) {
+            Placement p = {cell, i};
+            result.push_back(p);
+          }
+        }
+      }
     }
 
     currentHistory1 |= currentCount1;
@@ -573,6 +676,7 @@ void MakePlacement(const SearchParams &params, const SearchData &data,
   const LifeState catalyst = catalystdata.state.Moved(placement.pos);
 
   search.config.numCatalysts++;
+  if(catalystdata.transparent) search.config.numTransparent++;
   search.config.state |= catalyst;
   search.config.catalysts |= catalyst;
   search.config.required |= catalystdata.required.Moved(placement.pos);
@@ -581,6 +685,7 @@ void MakePlacement(const SearchParams &params, const SearchData &data,
 
   search.lookahead.state |= catalyst;
   search.lookahead.missingTime.push_back(0);
+  search.lookahead.catalystHasInteracted.push_back(false);
 
   search.history1 |= catalystdata.history1.Moved(placement.pos);
   search.history2 |= catalystdata.history2.Moved(placement.pos);
@@ -696,8 +801,12 @@ void RunSearch(const SearchParams &params, const SearchData &data,
   std::vector<Perturbation> perturbations =
       CollatePerturbations(params, data, search, placements);
 
-  for (auto &perturbation : perturbations) {
-    BranchPerturbation(params, data, search, perturbation);
+  for (auto &p : perturbations) {
+    // TODO: there may be repeat placements due to transparent catalysts
+    if (search.constraints[p.primary.catalystIx].tried.Get(p.primary.pos))
+      continue;
+
+    BranchPerturbation(params, data, search, p);
   }
 }
 
@@ -730,8 +839,8 @@ void SearchNode::BlockEarlyInteractions(const SearchParams &params,
     current.InteractionCounts(currentCount1, currentCount2, currentCountM);
     for (unsigned i = 0; i < data.catalysts.size(); i++) {
       const CatalystData &catalyst = data.catalysts[i];
-      constraints[i].tried |= catalyst.history1.Transformed(SymmetryTransform::Rotate180OddBoth).Convolve(currentCount2) |
-                              catalyst.history2.Transformed(SymmetryTransform::Rotate180OddBoth).Convolve(currentCount1);
+      constraints[i].tried |= catalyst.historyFlipped1.Convolve(currentCount2) |
+                              catalyst.historyFlipped2.Convolve(currentCount1);
     }
     current.Step();
   }
@@ -762,7 +871,7 @@ int main(int, char *argv[]) {
 
   std::vector<CatalystData> catalystdata;
   for (auto &c : params.catalysts) {
-    auto newdata = CatalystData::FromParamsSymmetrically(c);
+    auto newdata = CatalystData::FromParams(c);
     catalystdata.insert(catalystdata.end(), newdata.begin(), newdata.end()); // Why is C++ like this
   }
 
