@@ -337,55 +337,12 @@ struct SearchNode {
   std::vector<CatalystConstraints> constraints;
   // std::vector<Problem> problems;
 
-  SearchNode(const SearchParams &params, const SearchData &data) {
-    config = Configuration();
-    lookahead = Lookahead();
+  SearchNode(const SearchParams &params, const SearchData &data);
 
-    config.state = params.state.state;
-    lookahead.state = params.state.state;
-
-    config.state.InteractionCounts(history1, history2,
-                                             historyM);
-    constraints = std::vector<CatalystConstraints>(data.catalysts.size(),
-                                                   CatalystConstraints());
-
-    if (!params.state.history.IsEmpty()) {
-      for (unsigned i = 0; i < data.catalysts.size(); i++) {
-        constraints[i].tried |= data.catalysts[i].state.Transformed(SymmetryTransform::Rotate180OddBoth).Convolve(~params.state.history);
-      }
-    }
-  }
+  void BlockEarlyInteractions(const SearchParams &params, const SearchData &data);
 
   void Step(const SearchParams &params, const SearchData &data);
 };
-
-struct ContactEnvelope {
-  LifeState firstActive1;
-  LifeState firstActive2;
-  LifeState firstActiveM;
-};
-
-// Wait, do we want to do this? A cell could e.g. be history1 and then history2 later
-void BlockIncorrectContacts(const SearchParams &params, const SearchData &data,
-                            SearchNode &search, LifeState state) {
-  LifeState currentCount1(UNINITIALIZED), currentCount2(UNINITIALIZED),
-      currentCountM(UNINITIALIZED);
-  state.InteractionCounts(currentCount1, currentCount2,
-                                      currentCountM);
-  for (unsigned i = 0; i < data.catalysts.size(); i++) {
-    switch (data.catalysts[i].contactType) {
-    case CONTACT1:
-      search.constraints[i].tried |= currentCount2 | currentCountM;
-      break;
-    case CONTACT2:
-      search.constraints[i].tried |= currentCount1 | currentCountM;
-      break;
-    case CONTACTM:
-      search.constraints[i].tried |= currentCount1 | currentCount2;
-      break;
-    }
-  }
-}
 
 // TODO: determine exactly when this needs to be run.
 // Is it after the final perturbation?
@@ -431,7 +388,6 @@ Problem TryAdvance(const SearchParams &params, const SearchData &data,
       search.history1 |= currentCount1;
       search.history2 |= currentCount2;
       search.historyM |= currentCountM;
-      // BlockIncorrectContacts(params, data, search, search.lookahead.state);
     } else {
       break;
     }
@@ -756,6 +712,50 @@ std::vector<LifeState> CalculateCollisionMasks(const std::vector<CatalystData> &
   return result;
 }
 
+void SearchNode::BlockEarlyInteractions(const SearchParams &params,
+                                        const SearchData &data) {
+  LifeState statezoi = params.state.state.ZOI();
+
+  // Always block overlapping placements
+  for (unsigned i = 0; i < data.catalysts.size(); i++) {
+    const CatalystData &catalyst = data.catalysts[i];
+    constraints[i].tried |= catalyst.state.Transformed(SymmetryTransform::Rotate180OddBoth).Convolve(statezoi);
+  }
+
+  LifeState current = params.state.state;
+  // Also block early interactions
+  for (unsigned g = 0; g < params.minFirstActiveGen; g++) {
+    LifeState currentCount1(UNINITIALIZED), currentCount2(UNINITIALIZED),
+        currentCountM(UNINITIALIZED);
+    current.InteractionCounts(currentCount1, currentCount2, currentCountM);
+    for (unsigned i = 0; i < data.catalysts.size(); i++) {
+      const CatalystData &catalyst = data.catalysts[i];
+      constraints[i].tried |= catalyst.history1.Transformed(SymmetryTransform::Rotate180OddBoth).Convolve(currentCount2) |
+                              catalyst.history2.Transformed(SymmetryTransform::Rotate180OddBoth).Convolve(currentCount1);
+    }
+    current.Step();
+  }
+}
+
+SearchNode::SearchNode(const SearchParams &params, const SearchData &data) {
+    config = Configuration();
+    lookahead = Lookahead();
+
+    config.state = params.state.state;
+    lookahead.state = params.state.state;
+
+    config.state.InteractionCounts(history1, history2,
+                                             historyM);
+    constraints = std::vector<CatalystConstraints>(data.catalysts.size(),
+                                                   CatalystConstraints());
+
+    if (!params.state.history.IsEmpty()) {
+      for (unsigned i = 0; i < data.catalysts.size(); i++) {
+        constraints[i].tried |= data.catalysts[i].state.Transformed(SymmetryTransform::Rotate180OddBoth).Convolve(~params.state.history);
+      }
+    }
+  }
+
 int main(int, char *argv[]) {
   auto toml = toml::parse(argv[1]);
   SearchParams params = SearchParams::FromToml(toml);
@@ -771,6 +771,8 @@ int main(int, char *argv[]) {
   SearchData data = {catalystdata, masks};
 
   SearchNode search(params, data);
+
+  search.BlockEarlyInteractions(params, data);
 
   RunSearch(params, data, search);
 }
