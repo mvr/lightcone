@@ -70,7 +70,11 @@ CatalystParams CatalystParams::FromToml(toml::value &toml) {
 struct SearchParams {
   std::vector<CatalystParams> catalysts;
 
+  LifeHistoryState state;
+
   unsigned maxCatalysts;
+  unsigned maxTransparent;
+
   unsigned minStableTime;
 
   // TODO are we actually checking all of these?
@@ -78,9 +82,6 @@ struct SearchParams {
   unsigned maxFirstActiveGen;
   unsigned minActiveWindowGens;
   unsigned maxActiveWindowGens;
-
-  LifeHistoryState state;
-  unsigned maxTransparent;
   unsigned maxStationaryTime;
 
   bool hasFilter;
@@ -101,6 +102,9 @@ struct SearchParams {
 SearchParams SearchParams::FromToml(toml::value &toml) {
   SearchParams params;
 
+  std::string rle = toml::find<std::string>(toml, "pattern");
+  params.state = LifeHistoryState::Parse(rle);
+
   params.maxCatalysts = toml::find_or(toml, "max-catalysts", 3);
   params.maxTransparent = toml::find_or(toml, "max-transparent", 0);
   params.minStableTime = toml::find_or(toml, "min-stable-time", 8);
@@ -113,11 +117,9 @@ SearchParams SearchParams::FromToml(toml::value &toml) {
   params.minActiveWindowGens = windowRange[0];
   params.maxActiveWindowGens = windowRange[1];
 
-  params.outputFile = toml::find_or(toml, "output-file", "lightcone-output.rle");
   params.maxStationaryTime = toml::find_or(toml, "max-stationary-time", 0);
 
-  std::string rle = toml::find<std::string>(toml, "pattern");
-  params.state = LifeHistoryState::Parse(rle);
+  params.outputFile = toml::find_or(toml, "output-file", "lightcone-output.rle");
 
   std::vector<int> patternCenterVec = toml::find_or<std::vector<int>>(toml, "pattern-center", {0, 0});
   std::pair<int, int> patternCenter = {-patternCenterVec[0], -patternCenterVec[1]};

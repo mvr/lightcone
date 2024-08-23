@@ -13,6 +13,7 @@ const unsigned approachRadius = 1; // Needs to match catalyst input
 // const unsigned perturbationLookahead = 5; // TODO
 
 const unsigned maxStationaryGens = 32 - 1;
+
 enum ContactType {
   CONTACT1,
   CONTACT2,
@@ -80,6 +81,7 @@ CatalystData CatalystData::FromParamsNormal(CatalystParams &params) {
 
   auto contactorigin = contact.FirstOn();
   // TODO: Calculate approach from the soups?
+  // This tramples the contents of `params`, seems bad
   params.approach.Move(-contactorigin.first, -contactorigin.second);
 
   params.state.AlignWith(params.approach.state & ~params.approach.marked);
@@ -229,7 +231,7 @@ struct Placement {
 };
 
 struct Perturbation {
-  uint64_t hash;
+  Placement primary;
   std::vector<Placement> placements;
 };
 
@@ -358,10 +360,12 @@ Problem Lookahead::Problem(const SearchParams &params, const SearchData &data,
       for (unsigned i = 0; i < config.numCatalysts; i++) {
         if (missingTime[i] > data.catalysts[config.placements[i].catalystIx].maxRecoveryTime) {
           const LifeTarget &target = config.targets[i];
+
           std::pair<int, int> cell =
               (target.wanted & ~state).FirstOn();
           if (cell.first == -1 && cell.second == -1)
             cell = (target.unwanted & state).FirstOn();
+
           return {cell, gen, ProblemType::UNRECOVERED};
         }
       }
@@ -422,7 +426,6 @@ LifeState Problem::LightCone(unsigned currentgen) {
 // Arranged so 0 -> 1 is increasing information
 struct CatalystConstraints {
   LifeState tried;
-  // These refer to the validity *at the origin of the catalyst*
   LifeState knownPlaceable;
   LifeState knownUnplaceable;
 };
@@ -436,7 +439,6 @@ struct SearchNode {
   LifeState historyM;
 
   std::vector<CatalystConstraints> constraints;
-  // std::vector<Problem> problems;
 
   SearchNode(const SearchParams &params, const SearchData &data);
 
@@ -683,14 +685,14 @@ CollatePerturbations(const SearchParams &params, const SearchData &data,
   // TODO placeholder, actually dedup the perturbations
   std::vector<Perturbation> result;
   for (auto &p : placements) {
-    result.push_back({0, {p}});
+    result.push_back({p, {p}});
   }
   return result;
 }
 
 void MakePlacement(const SearchParams &params, const SearchData &data,
                    SearchNode &search, const Perturbation &p) {
-  const Placement &placement = p.placements[0];
+  const Placement &placement = p.primary;
   const CatalystData &catalystdata = data.catalysts[placement.catalystIx];
 
   const LifeState catalyst = catalystdata.state.Moved(placement.pos);
@@ -718,7 +720,7 @@ void MakePlacement(const SearchParams &params, const SearchData &data,
 
 void ResetLightcone(const SearchParams &params, const SearchData &data,
                     SearchNode &search, const Perturbation &p) {
-  const Placement &placement = p.placements[0];
+  const Placement &placement = p.primary;
 
   // TODO: Assuming that the placement has already been made
   LifeState current = search.lookahead.state;
@@ -750,7 +752,7 @@ void RunSearch(const SearchParams &params, const SearchData &data,
 void BranchPerturbation(const SearchParams &params, const SearchData &data,
                         SearchNode &search, const Perturbation &p) {
 
-  if constexpr (debug) std::cout << "Branching: " << p.placements[0].catalystIx << std::endl;
+  if constexpr (debug) std::cout << "Branching: " << p.primary.catalystIx << std::endl;
 
   for (auto &placement : p.placements) {
     search.constraints[placement.catalystIx].tried.Set(placement.pos);
