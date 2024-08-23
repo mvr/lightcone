@@ -81,6 +81,7 @@ struct SearchParams {
 
   LifeHistoryState state;
   unsigned maxTransparent;
+  unsigned maxStationaryTime;
 
   bool hasFilter;
   std::vector<Filter> filters;
@@ -113,6 +114,7 @@ SearchParams SearchParams::FromToml(toml::value &toml) {
   params.maxActiveWindowGens = windowRange[1];
 
   params.outputFile = toml::find_or(toml, "output-file", "lightcone-output.rle");
+  params.maxStationaryTime = toml::find_or(toml, "max-stationary-time", 0);
 
   std::string rle = toml::find<std::string>(toml, "pattern");
   params.state = LifeHistoryState::Parse(rle);

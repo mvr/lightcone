@@ -4,6 +4,7 @@
 #include "LifeAPI/Symmetry.hpp"
 
 #include "Params.hpp"
+#include "Countdown.hpp"
 
 const bool debug = false;
 const bool print_progress = true;
@@ -11,6 +12,7 @@ const bool print_progress = true;
 const unsigned approachRadius = 1; // Needs to match catalyst input
 // const unsigned perturbationLookahead = 5; // TODO
 
+const unsigned maxStationaryGens = 32 - 1;
 enum ContactType {
   CONTACT1,
   CONTACT2,
@@ -257,6 +259,7 @@ enum struct ProblemType {
   UNRECOVERED,
   NO_REACTION,
   NOT_TRANSPARENT,
+  STATIONARY,
 };
 
 std::ostream& operator<<(std::ostream& out, const ProblemType value){
@@ -269,6 +272,7 @@ std::ostream& operator<<(std::ostream& out, const ProblemType value){
     case ProblemType::UNRECOVERED: return "UNRECOVERED";
     case ProblemType::NO_REACTION: return "NO_REACTION";
     case ProblemType::NOT_TRANSPARENT: return "NOT_TRANSPARENT";
+    case ProblemType::STATIONARY:       return "STATIONARY";
     }
   }();
 }
@@ -285,6 +289,7 @@ struct Problem {
 struct Lookahead {
   LifeState state;
   LifeState everActive;
+  LifeCountdown<maxStationaryGens> stationaryCountdown;
 
   unsigned gen;
   bool hasInteracted;
@@ -305,6 +310,13 @@ void Lookahead::Step(const Configuration &config) {
   state.Step();
   gen++;
   everActive |= state ^ config.state;
+
+  if(stationaryCountdown.n != 0) {
+    LifeState stationary = state & ~config.catalysts;
+    stationaryCountdown.Reset(~stationary);
+    stationaryCountdown.Start(stationary);
+    stationaryCountdown.Tick();
+  }
 
   // Why is there no easy way to iterate with index? My kingdom for a `zip`
   unsigned i = 0;
@@ -333,6 +345,13 @@ Problem Lookahead::Problem(const SearchParams &params, const SearchData &data,
       std::pair<int, int> cell = requiredViolations.FirstOn();
       if (cell != std::make_pair(-1, -1))
         return {cell, gen, ProblemType::REQUIRED};
+    }
+
+    if(params.maxStationaryTime != 0) {
+      LifeState stationaryViolations = stationaryCountdown.finished;
+      std::pair<int, int> cell = stationaryViolations.FirstOn();
+      if (cell != std::make_pair(-1, -1))
+        return {cell, gen, ProblemType::STATIONARY};
     }
 
     {
@@ -389,6 +408,7 @@ LifeState Problem::LightCone(unsigned currentgen) {
   case ProblemType::FILTER:
   case ProblemType::UNRECOVERED:
   case ProblemType::NOT_TRANSPARENT:
+  case ProblemType::STATIONARY:
     return LifeState::NZOIAround(cell, gen - currentgen);
   case ProblemType::NO_REACTION:
     return ~LifeState();
@@ -852,6 +872,7 @@ SearchNode::SearchNode(const SearchParams &params, const SearchData &data) {
 
     config.state = params.state.state;
     lookahead.state = params.state.state;
+    lookahead.stationaryCountdown.n = params.maxStationaryTime;
 
     config.state.InteractionCounts(history1, history2,
                                              historyM);
