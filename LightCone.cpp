@@ -532,6 +532,8 @@ std::ostream& operator<<(std::ostream& out, const PlacementValidity value){
 PlacementValidity TestPlacement(const SearchData &data, SearchNode &search,
                                 const LifeState &state, Placement p,
                                 ContactType contactType, uint64_t signature,
+                                const LifeState &historyCount1,
+                                const LifeState &historyCount2,
                                 const LifeState &currentCount1,
                                 const LifeState &currentCount2) {
   const CatalystData &catalyst = data.catalysts[p.catalystIx];
@@ -557,6 +559,22 @@ PlacementValidity TestPlacement(const SearchData &data, SearchNode &search,
     }
   }
 
+  // TODO: should probably check M too...
+
+  // Check whether this catalyst actually would have interacted in a previous
+  // generation
+  LifeState pastinteractions = (catalyst.history1.Moved(p.pos) & historyCount2) | (catalyst.history2.Moved(p.pos) & historyCount1);
+  if (!pastinteractions.IsEmpty()) {
+    constexpr LifeState originMask =
+        LifeState::NZOIAround({0, 0}, approachRadius);
+    if ((originMask & pastinteractions).IsEmpty()) {
+      return PlacementValidity::FAILED_ELSEWHERE;
+    } else {
+      return PlacementValidity::FAILED_CONTACT;
+    }
+  }
+
+  // Check whether the cataylst's `required` is violated next generation
   LifeState immediatebirths = (catalyst.history1.Moved(p.pos) & currentCount2) | (catalyst.history2.Moved(p.pos) & currentCount1);
   immediatebirths &= (catalyst.required & ~catalyst.state).Moved(p.pos);
   if (!immediatebirths.IsEmpty())
@@ -631,7 +649,7 @@ std::vector<Placement> CollectPlacements(const SearchParams &params,
         }
 
         PlacementValidity validity =
-          TestPlacement(data, search, current, p, contactType, signature, currentCount1, currentCount2);
+          TestPlacement(data, search, current, p, contactType, signature, currentHistory1, currentHistory2, currentCount1, currentCount2);
 
         switch (validity) {
         case PlacementValidity::VALID:
