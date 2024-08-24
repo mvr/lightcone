@@ -94,9 +94,9 @@ CatalystData CatalystData::FromParamsNormal(CatalystParams &params) {
   result.required = params.required.marked;
   result.state.InteractionCounts(result.history1, result.history2,
                                  result.historyM);
-  result.historyFlipped1 = result.history1.Transformed(SymmetryTransform::Rotate180OddBoth);
-  result.historyFlipped2 = result.history2.Transformed(SymmetryTransform::Rotate180OddBoth);
-  result.historyFlippedM = result.historyM.Transformed(SymmetryTransform::Rotate180OddBoth);
+  result.historyFlipped1 = result.history1.Mirrored();
+  result.historyFlipped2 = result.history2.Mirrored();
+  result.historyFlippedM = result.historyM.Mirrored();
   result.approachOn = params.approach.marked & params.approach.state;
   result.approachOff = (params.approach.marked & ~params.approach.state) | result.state | (result.required & ~result.state);
 
@@ -137,9 +137,9 @@ CatalystData CatalystData::FromParamsTransparent(CatalystParams &params) {
   result.required = LifeState();
 
   result.state.InteractionCounts(result.history1, result.history2, result.historyM);
-  result.historyFlipped1 = result.history1.Transformed(SymmetryTransform::Rotate180OddBoth);
-  result.historyFlipped2 = result.history2.Transformed(SymmetryTransform::Rotate180OddBoth);
-  result.historyFlippedM = result.historyM.Transformed(SymmetryTransform::Rotate180OddBoth);
+  result.historyFlipped1 = result.history1.Mirrored();
+  result.historyFlipped2 = result.history2.Mirrored();
+  result.historyFlippedM = result.historyM.Mirrored();
 
   result.approachOn = LifeState();
   result.approachOff = LifeState();
@@ -870,7 +870,7 @@ void SearchNode::BlockEarlyInteractions(const SearchParams &params,
   // Always block overlapping placements
   for (unsigned i = 0; i < data.catalysts.size(); i++) {
     const CatalystData &catalyst = data.catalysts[i];
-    constraints[i].tried |= catalyst.state.Transformed(SymmetryTransform::Rotate180OddBoth).Convolve(statezoi);
+    constraints[i].tried |= catalyst.state.Mirrored().Convolve(statezoi);
   }
 
   LifeState current = params.state.state;
@@ -903,7 +903,7 @@ SearchNode::SearchNode(const SearchParams &params, const SearchData &data) {
 
     if (!params.state.history.IsEmpty()) {
       for (unsigned i = 0; i < data.catalysts.size(); i++) {
-        constraints[i].tried |= data.catalysts[i].state.Transformed(SymmetryTransform::Rotate180OddBoth).Convolve(~params.state.history);
+        constraints[i].tried |= data.catalysts[i].state.Mirrored().Convolve(~params.state.history);
       }
     }
   }
