@@ -393,11 +393,11 @@ Problem Lookahead::Problem(const SearchParams &params, const SearchData &data,
 
     {
       if (gen > params.minFirstActiveGen && hasInteracted && recoveredTime > params.minStableTime) {
-        return {{-1, -1}, 0, ProblemType::WINNER};
+        return {{-1, -1}, gen, ProblemType::WINNER};
       }
     }
 
-    return {{-1, -1}, 0, ProblemType::NONE};
+    return {{-1, -1}, gen, ProblemType::NONE};
 }
 
 std::ostream& operator<<(std::ostream& out, const Problem value){
@@ -451,13 +451,13 @@ struct SearchNode {
 // Is it after the final perturbation?
 Problem TryAdvance(const SearchParams &params, const SearchData &data,
                 const Configuration &config, SearchNode &search) {
+  if constexpr (debug) std::cout << "Trying to advance: " << search.lookahead.state << std::endl;
+
   while (true) {
     Problem problem = search.lookahead.Problem(params, data, config);
 
     if (problem.type != ProblemType::NONE)
         return problem;
-
-    if constexpr (debug) std::cout << "Trying to advance: " << search.lookahead.state << std::endl;
 
     LifeState currentCount1(UNINITIALIZED), currentCount2(UNINITIALIZED),
         currentCountM(UNINITIALIZED);
@@ -466,8 +466,6 @@ Problem TryAdvance(const SearchParams &params, const SearchData &data,
     LifeState newContactPoints = (currentCount1 & ~search.history1) |
                                  (currentCount2 & ~search.history2) |
                                  (currentCountM & ~search.historyM);
-
-    if constexpr (debug) std::cout << "New contact points: " << newContactPoints << std::endl;
 
     bool needAdvance = true;
 
@@ -486,11 +484,12 @@ Problem TryAdvance(const SearchParams &params, const SearchData &data,
     }
 
     if (needAdvance) {
-      if constexpr (debug) std::cout << "Advancing!" << std::endl;
       search.lookahead.Step(search.config);
       search.history1 |= currentCount1;
       search.history2 |= currentCount2;
       search.historyM |= currentCountM;
+
+      if constexpr (debug) std::cout << "Advanced to " << search.lookahead.state << std::endl;
     } else {
       break;
     }
@@ -501,12 +500,14 @@ Problem TryAdvance(const SearchParams &params, const SearchData &data,
   Lookahead lookahead = search.lookahead;
 
   while (true) {
+    lookahead.Step(config);
+
+    if constexpr (debug) std::cout << "Lookahead to " << lookahead.state << std::endl;
+
     Problem problem = lookahead.Problem(params, data, config);
 
     if (problem.type != ProblemType::NONE)
-        return problem;
-
-    lookahead.Step(config);
+      return problem;
   }
 }
 
@@ -752,8 +753,6 @@ void RunSearch(const SearchParams &params, const SearchData &data,
 void BranchPerturbation(const SearchParams &params, const SearchData &data,
                         SearchNode &search, const Perturbation &p) {
 
-  if constexpr (debug) std::cout << "Branching: " << p.primary.catalystIx << std::endl;
-
   for (auto &placement : p.placements) {
     search.constraints[placement.catalystIx].tried.Set(placement.pos);
   }
@@ -762,8 +761,11 @@ void BranchPerturbation(const SearchParams &params, const SearchData &data,
 
   MakePlacement(params, data, newSearch, p);
 
+
   if constexpr (debug) if (params.hasOracle && !(newSearch.config.state & ~params.oracle).IsEmpty())
     return;
+
+  if constexpr (debug) std::cout << "Branching: " << p.primary.catalystIx << std::endl;
 
   ResetLightcone(params, data, newSearch, p);
 
