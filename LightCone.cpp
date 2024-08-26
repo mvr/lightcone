@@ -288,6 +288,10 @@ struct Problem {
   LifeState LightCone(unsigned gen);
 };
 
+std::ostream& operator<<(std::ostream& out, const Problem value){
+  return out << value.type << " on gen " << value.gen << " at (" << value.cell.first << ", " << value.cell.second << ")";
+}
+
 // The state of a configuration after stepping
 struct Lookahead {
   LifeState state;
@@ -401,9 +405,6 @@ Problem Lookahead::Problem(const SearchParams &params, const SearchData &data,
     return {{-1, -1}, gen, ProblemType::NONE};
 }
 
-std::ostream& operator<<(std::ostream& out, const Problem value){
-  return out << value.type << " on gen " << value.gen << " at (" << value.cell.first << ", " << value.cell.second << ")";
-}
 
 // Contact points that are close enough to the current problem to
 // have an effect on it.
@@ -614,8 +615,6 @@ std::vector<Placement> CollectPlacements(const SearchParams &params,
 
     newContactPoints &= problem.LightCone(g);
 
-    if constexpr (debug) std::cout << "Gen " << g << " contactPoints: " << newContactPoints << std::endl;
-
     for (auto cell = newContactPoints.FirstOn(); cell != std::make_pair(-1, -1);
          newContactPoints.Erase(cell), cell = newContactPoints.FirstOn()) {
 
@@ -776,7 +775,7 @@ void RunSearch(const SearchParams &params, const SearchData &data,
   if constexpr (print_progress) {
     static unsigned counter = 0;
     counter++;
-    if (counter == 100000) {
+    if (counter == 1000000) [[unlikely]] {
       std::cout << "Current configuration: " << search.config.state << std::endl;
       LifeState problemGen = search.lookahead.state;
       problemGen.Step(problem.gen - search.lookahead.gen);
