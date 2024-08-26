@@ -1,12 +1,11 @@
 #include <vector>
-#include <ranges>
 
 #include "LifeAPI/LifeAPI.hpp"
 #include "LifeAPI/Symmetry.hpp"
 
-#include "Params.hpp"
-#include "Countdown.hpp"
 #include "Bloom.hpp"
+#include "Countdown.hpp"
+#include "Params.hpp"
 
 const bool debug = false;
 const bool print_progress = true;
@@ -24,12 +23,12 @@ enum ContactType {
   TRANSPARENT,
 };
 
-std::ostream& operator<<(std::ostream& out, const ContactType value){
+std::ostream &operator<<(std::ostream &out, const ContactType value) {
   return out << [value]() {
     switch (value) {
-    case ContactType::CONTACT1: return "CONTACT1";
-    case ContactType::CONTACT2: return "CONTACT2";
-    case ContactType::CONTACTM: return "CONTACTM";
+    case ContactType::CONTACT1:    return "CONTACT1";
+    case ContactType::CONTACT2:    return "CONTACT2";
+    case ContactType::CONTACTM:    return "CONTACTM";
     case ContactType::TRANSPARENT: return "TRANSPARENT";
     }
   }();
@@ -76,7 +75,8 @@ CatalystData CatalystData::FromParamsNormal(CatalystParams &params) {
     reactionWithCatalyst.Step();
     reactionWithCatalyst &= ~catalyst;
 
-    LifeState reactionWithoutCatalyst = params.approach.state & params.approach.marked;
+    LifeState reactionWithoutCatalyst =
+        params.approach.state & params.approach.marked;
     reactionWithoutCatalyst.Step();
 
     contact = reactionWithCatalyst ^ reactionWithoutCatalyst;
@@ -101,7 +101,8 @@ CatalystData CatalystData::FromParamsNormal(CatalystParams &params) {
   result.historyFlipped2 = result.history2.Mirrored();
   result.historyFlippedM = result.historyM.Mirrored();
   result.approachOn = params.approach.marked & params.approach.state;
-  result.approachOff = (params.approach.marked & ~params.approach.state) | result.state | (result.required & ~result.state);
+  result.approachOff = (params.approach.marked & ~params.approach.state) |
+                       result.state | (result.required & ~result.state);
 
   assert((result.approachOn & result.approachOff).IsEmpty());
 
@@ -112,7 +113,8 @@ CatalystData CatalystData::FromParamsNormal(CatalystParams &params) {
           : (contactCount == 2 ? ContactType::CONTACT2 : ContactType::CONTACTM);
 
   result.signature = result.approachOn.GetPatch<approachRadius>({0, 0});
-  result.signatureMask = (result.approachOn | result.approachOff).GetPatch<approachRadius>({0, 0});
+  result.signatureMask =
+      (result.approachOn | result.approachOff).GetPatch<approachRadius>({0, 0});
 
   result.minRecoveryTime = params.minRecoveryTime;
   result.maxRecoveryTime = params.maxRecoveryTime;
@@ -139,7 +141,8 @@ CatalystData CatalystData::FromParamsTransparent(CatalystParams &params) {
   result.halo = params.state.ZOI() & ~params.state;
   result.required = LifeState();
 
-  result.state.InteractionCounts(result.history1, result.history2, result.historyM);
+  result.state.InteractionCounts(result.history1, result.history2,
+                                 result.historyM);
   result.historyFlipped1 = result.history1.Mirrored();
   result.historyFlipped2 = result.history2.Mirrored();
   result.historyFlippedM = result.historyM.Mirrored();
@@ -187,7 +190,8 @@ CatalystData CatalystData::Transformed(SymmetryTransform t) {
 
   // Needs to be recalculated
   result.signature = result.approachOn.GetPatch<approachRadius>({0, 0});
-  result.signatureMask = (result.approachOn | result.approachOff).GetPatch<approachRadius>({0, 0});
+  result.signatureMask =
+      (result.approachOn | result.approachOff).GetPatch<approachRadius>({0, 0});
 
   return result;
 }
@@ -228,7 +232,6 @@ struct SearchData {
   LifeBloom *bloom;
 };
 
-
 struct Placement {
   std::pair<int, int> pos;
   unsigned catalystIx;
@@ -251,8 +254,8 @@ struct Configuration {
   std::vector<LifeTarget> targets; // Pre-shifted catalysts
 
   Configuration()
-      : state{}, catalysts{}, required{}, numCatalysts{0}, numTransparent{0}, lastInteraction{0},
-        placements{}, targets{} {}
+      : state{}, catalysts{}, required{}, numCatalysts{0}, numTransparent{0},
+        lastInteraction{0}, placements{}, targets{} {}
 };
 
 enum struct ProblemType {
@@ -267,18 +270,18 @@ enum struct ProblemType {
   BLOOM_SEEN,
 };
 
-std::ostream& operator<<(std::ostream& out, const ProblemType value){
+std::ostream &operator<<(std::ostream &out, const ProblemType value) {
   return out << [value]() {
     switch (value) {
-    case ProblemType::NONE:        return "NONE";
-    case ProblemType::WINNER:      return "WINNER";
-    case ProblemType::REQUIRED:    return "REQUIRED";
-    case ProblemType::FILTER:      return "FILTER";
-    case ProblemType::UNRECOVERED: return "UNRECOVERED";
-    case ProblemType::NO_REACTION: return "NO_REACTION";
+    case ProblemType::NONE:            return "NONE";
+    case ProblemType::WINNER:          return "WINNER";
+    case ProblemType::REQUIRED:        return "REQUIRED";
+    case ProblemType::FILTER:          return "FILTER";
+    case ProblemType::UNRECOVERED:     return "UNRECOVERED";
+    case ProblemType::NO_REACTION:     return "NO_REACTION";
     case ProblemType::NOT_TRANSPARENT: return "NOT_TRANSPARENT";
-    case ProblemType::STATIONARY:       return "STATIONARY";
-    case ProblemType::BLOOM_SEEN:       return "BLOOM_SEEN";
+    case ProblemType::STATIONARY:      return "STATIONARY";
+    case ProblemType::BLOOM_SEEN:      return "BLOOM_SEEN";
     }
   }();
 }
@@ -291,8 +294,9 @@ struct Problem {
   LifeState LightCone(unsigned gen);
 };
 
-std::ostream& operator<<(std::ostream& out, const Problem value){
-  return out << value.type << " on gen " << value.gen << " at (" << value.cell.first << ", " << value.cell.second << ")";
+std::ostream &operator<<(std::ostream &out, const Problem value) {
+  return out << value.type << " on gen " << value.gen << " at ("
+             << value.cell.first << ", " << value.cell.second << ")";
 }
 
 // The state of a configuration after stepping
@@ -325,7 +329,7 @@ void Lookahead::Step(const Configuration &config) {
   gen++;
   everActive |= state ^ config.state;
 
-  if(stationaryCountdown.n != 0) {
+  if (stationaryCountdown.n != 0) {
     LifeState stationary = state & ~config.catalysts;
     stationaryCountdown.Reset(~stationary);
     stationaryCountdown.Start(stationary);
@@ -351,74 +355,73 @@ void Lookahead::Step(const Configuration &config) {
 }
 
 Problem Lookahead::Problem(const SearchParams &params, const SearchData &data,
-                         const Configuration &config) const {
-    {
-      LifeState requiredViolations =
-          config.required &
-          (state ^ config.catalysts);
-      std::pair<int, int> cell = requiredViolations.FirstOn();
-      if (cell != std::make_pair(-1, -1))
-        return {cell, gen, ProblemType::REQUIRED};
-    }
+                           const Configuration &config) const {
+  {
+    LifeState requiredViolations = config.required & (state ^ config.catalysts);
+    std::pair<int, int> cell = requiredViolations.FirstOn();
+    if (cell != std::make_pair(-1, -1))
+      return {cell, gen, ProblemType::REQUIRED};
+  }
 
-    if(params.maxStationaryTime != 0) {
-      LifeState stationaryViolations = stationaryCountdown.finished;
-      std::pair<int, int> cell = stationaryViolations.FirstOn();
-      if (cell != std::make_pair(-1, -1))
-        return {cell, gen, ProblemType::STATIONARY};
-    }
+  if (params.maxStationaryTime != 0) {
+    LifeState stationaryViolations = stationaryCountdown.finished;
+    std::pair<int, int> cell = stationaryViolations.FirstOn();
+    if (cell != std::make_pair(-1, -1))
+      return {cell, gen, ProblemType::STATIONARY};
+  }
 
-    {
-      for (unsigned i = 0; i < config.numCatalysts; i++) {
-        if (missingTime[i] > data.catalysts[config.placements[i].catalystIx].maxRecoveryTime) {
-          const LifeTarget &target = config.targets[i];
+  {
+    for (unsigned i = 0; i < config.numCatalysts; i++) {
+      if (missingTime[i] >
+          data.catalysts[config.placements[i].catalystIx].maxRecoveryTime) {
+        const LifeTarget &target = config.targets[i];
 
-          std::pair<int, int> cell =
-              (target.wanted & ~state).FirstOn();
-          if (cell.first == -1 && cell.second == -1)
-            cell = (target.unwanted & state).FirstOn();
+        std::pair<int, int> cell = (target.wanted & ~state).FirstOn();
+        if (cell.first == -1 && cell.second == -1)
+          cell = (target.unwanted & state).FirstOn();
 
-          return {cell, gen, ProblemType::UNRECOVERED};
-        }
+        return {cell, gen, ProblemType::UNRECOVERED};
       }
     }
+  }
 
-    {
-      for (unsigned i = 0; i < config.numCatalysts; i++) {
-        if (!data.catalysts[config.placements[i].catalystIx].transparent)
-          continue;
+  {
+    for (unsigned i = 0; i < config.numCatalysts; i++) {
+      if (!data.catalysts[config.placements[i].catalystIx].transparent)
+        continue;
 
-        if(catalystHasInteracted[i] && missingTime[i] == 0) {
-          LifeState nonTransparentCells = config.targets[i].wanted & ~everActive;
+      if (catalystHasInteracted[i] && missingTime[i] == 0) {
+        LifeState nonTransparentCells = config.targets[i].wanted & ~everActive;
 
-          std::pair<int, int> cell = nonTransparentCells.FirstOn();
-          if (cell.first != -1 && cell.second != -1)
-            return {cell, gen, ProblemType::NOT_TRANSPARENT};
-        }
+        std::pair<int, int> cell = nonTransparentCells.FirstOn();
+        if (cell.first != -1 && cell.second != -1)
+          return {cell, gen, ProblemType::NOT_TRANSPARENT};
       }
     }
+  }
 
-    {
-      if (gen > params.maxFirstActiveGen && !hasInteracted)
-        return {{-1, -1}, gen, ProblemType::NO_REACTION};
+  {
+    if (gen > params.maxFirstActiveGen && !hasInteracted)
+      return {{-1, -1}, gen, ProblemType::NO_REACTION};
+  }
+
+  {
+    if (gen > params.minFirstActiveGen && hasInteracted &&
+        recoveredTime > params.minStableTime) {
+      return {{-1, -1}, gen, ProblemType::WINNER};
     }
+  }
 
-    {
-      if (gen > params.minFirstActiveGen && hasInteracted && recoveredTime > params.minStableTime) {
-        return {{-1, -1}, gen, ProblemType::WINNER};
-      }
+  if (params.useBloomFilter && Bloomable(config)) {
+    LifeState key = BloomKey(config);
+    if (key.GetPop() > bloomThreshold) {
+      bool seen = data.bloom->Lookup(key);
+      if (seen)
+        return {{-1, -1}, gen, ProblemType::BLOOM_SEEN};
     }
+  }
 
-    if (params.useBloomFilter && Bloomable(config)) {
-      LifeState key = BloomKey(config);
-      if (key.GetPop() > bloomThreshold) {
-        bool seen = data.bloom->Lookup(key);
-        if (seen)
-          return {{-1, -1}, gen, ProblemType::BLOOM_SEEN};
-      }
-    }
-
-    return {{-1, -1}, gen, ProblemType::NONE};
+  return {{-1, -1}, gen, ProblemType::NONE};
 }
 
 bool Lookahead::Bloomable(const Configuration &config) const {
@@ -429,7 +432,6 @@ bool Lookahead::Bloomable(const Configuration &config) const {
 LifeState Lookahead::BloomKey(const Configuration &config) const {
   return state & ~config.catalysts;
 }
-
 
 // Contact points that are close enough to the current problem to
 // have an effect on it.
@@ -470,7 +472,8 @@ struct SearchNode {
 
   SearchNode(const SearchParams &params, const SearchData &data);
 
-  void BlockEarlyInteractions(const SearchParams &params, const SearchData &data);
+  void BlockEarlyInteractions(const SearchParams &params,
+                              const SearchData &data);
 
   void Step(const SearchParams &params, const SearchData &data);
 };
@@ -478,19 +481,19 @@ struct SearchNode {
 // TODO: determine exactly when this needs to be run.
 // Is it after the final perturbation?
 Problem TryAdvance(const SearchParams &params, const SearchData &data,
-                const Configuration &config, SearchNode &search) {
+                   const Configuration &config, SearchNode &search) {
   if constexpr (debug) std::cout << "Trying to advance: " << search.lookahead.state << std::endl;
 
   while (true) {
     Problem problem = search.lookahead.Problem(params, data, config);
 
     if (problem.type != ProblemType::NONE)
-        return problem;
+      return problem;
 
     LifeState currentCount1(UNINITIALIZED), currentCount2(UNINITIALIZED),
         currentCountM(UNINITIALIZED);
-    search.lookahead.state.InteractionCounts(
-        currentCount1, currentCount2, currentCountM);
+    search.lookahead.state.InteractionCounts(currentCount1, currentCount2,
+                                             currentCountM);
     LifeState newContactPoints = (currentCount1 & ~search.history1) |
                                  (currentCount2 & ~search.history2) |
                                  (currentCountM & ~search.historyM);
@@ -560,7 +563,7 @@ enum struct PlacementValidity {
   FAILED_ELSEWHERE // Invalid outside that, so will need to be re-checked
 };
 
-std::ostream& operator<<(std::ostream& out, const PlacementValidity value){
+std::ostream &operator<<(std::ostream &out, const PlacementValidity value) {
   return out << [value]() {
     switch (value) {
     case PlacementValidity::VALID:            return "VALID";
@@ -605,7 +608,9 @@ PlacementValidity TestPlacement(const SearchData &data, SearchNode &search,
 
   // Check whether this catalyst actually would have interacted in a previous
   // generation
-  LifeState pastinteractions = (catalyst.history1.Moved(p.pos) & historyCount2) | (catalyst.history2.Moved(p.pos) & historyCount1);
+  LifeState pastinteractions =
+      (catalyst.history1.Moved(p.pos) & historyCount2) |
+      (catalyst.history2.Moved(p.pos) & historyCount1);
   if (!pastinteractions.IsEmpty()) {
     constexpr LifeState originMask =
         LifeState::NZOIAround({0, 0}, approachRadius);
@@ -617,7 +622,8 @@ PlacementValidity TestPlacement(const SearchData &data, SearchNode &search,
   }
 
   // Check whether the cataylst's `required` is violated next generation
-  LifeState immediatebirths = (catalyst.history1.Moved(p.pos) & currentCount2) | (catalyst.history2.Moved(p.pos) & currentCount1);
+  LifeState immediatebirths = (catalyst.history1.Moved(p.pos) & currentCount2) |
+                              (catalyst.history2.Moved(p.pos) & currentCount1);
   immediatebirths &= (catalyst.required & ~catalyst.state).Moved(p.pos);
   if (!immediatebirths.IsEmpty())
     return PlacementValidity::FAILED_ELSEWHERE;
@@ -647,8 +653,8 @@ std::vector<Placement> CollectPlacements(const SearchParams &params,
 
     LifeState currentCount1(UNINITIALIZED), currentCount2(UNINITIALIZED),
         currentCountM(UNINITIALIZED);
-    current.InteractionCounts(currentCount1, currentCount2,
-                                          currentCountM);
+    current.InteractionCounts(currentCount1, currentCount2, currentCountM);
+
     LifeState newContactPoints = (currentCount1 & ~currentHistory1) |
                                  (currentCount2 & ~currentHistory2) |
                                  (currentCountM & ~currentHistoryM);
@@ -677,19 +683,22 @@ std::vector<Placement> CollectPlacements(const SearchParams &params,
           continue;
         }
 
-        if (search.constraints[i].tried.Get(cell) || search.constraints[i].knownUnplaceable.Get(cell)) {
+        if (search.constraints[i].tried.Get(cell) ||
+            search.constraints[i].knownUnplaceable.Get(cell)) {
           continue;
         }
 
         Placement p = {cell, i, g};
 
-        if (catalyst.contactType == contactType && search.constraints[i].knownPlaceable.Get(cell)) {
+        if (catalyst.contactType == contactType &&
+            search.constraints[i].knownPlaceable.Get(cell)) {
           result.push_back(p);
           continue;
         }
 
-        PlacementValidity validity =
-          TestPlacement(data, search, current, p, contactType, signature, currentHistory1, currentHistory2, currentCount1, currentCount2);
+        PlacementValidity validity = TestPlacement(
+            data, search, current, p, contactType, signature, currentHistory1,
+            currentHistory2, currentCount1, currentCount2);
 
         switch (validity) {
         case PlacementValidity::VALID:
@@ -714,12 +723,14 @@ std::vector<Placement> CollectPlacements(const SearchParams &params,
           if (catalyst.contactType != ContactType::TRANSPARENT)
             continue;
 
-          LifeState newContactPoints = catalyst.historyFlipped1.Convolve(newHistory2) |
-                                       catalyst.historyFlipped2.Convolve(newHistory1);
+          LifeState newContactPoints =
+              catalyst.historyFlipped1.Convolve(newHistory2) |
+              catalyst.historyFlipped2.Convolve(newHistory1);
           newContactPoints &= ~search.constraints[i].tried;
 
-          for (auto cell = newContactPoints.FirstOn(); cell != std::make_pair(-1, -1);
-               newContactPoints.Erase(cell), cell = newContactPoints.FirstOn()) {
+          for (auto cell = newContactPoints.FirstOn();
+               cell != std::make_pair(-1, -1); newContactPoints.Erase(cell),
+                    cell = newContactPoints.FirstOn()) {
             Placement p = {cell, i, g};
             result.push_back(p);
           }
@@ -750,7 +761,9 @@ void MakePlacement(const SearchParams &params, const SearchData &data,
   search.config.catalysts |= catalyst;
   search.config.required |= catalystdata.required.Moved(placement.pos);
   search.config.placements.push_back(placement);
-  search.config.targets.push_back(LifeTarget(catalystdata.state.Moved(placement.pos), catalystdata.halo.Moved(placement.pos)));
+  search.config.targets.push_back(
+      LifeTarget(catalystdata.state.Moved(placement.pos),
+                 catalystdata.halo.Moved(placement.pos)));
 
   search.lookahead.state |= catalyst;
   search.lookahead.missingTime.push_back(0);
@@ -761,7 +774,9 @@ void MakePlacement(const SearchParams &params, const SearchData &data,
   search.historyM |= catalystdata.historyM.Moved(placement.pos);
 
   for (unsigned t = 0; t < data.catalysts.size(); t++) {
-    search.constraints[t].tried |= data.collisionMasks[placement.catalystIx * data.catalysts.size() + t].Moved(placement.pos.first, placement.pos.second);
+    search.constraints[t].tried |=
+        data.collisionMasks[placement.catalystIx * data.catalysts.size() + t]
+            .Moved(placement.pos.first, placement.pos.second);
   }
 }
 
@@ -780,7 +795,8 @@ void ResetLightcone(const SearchParams &params, const SearchData &data,
   for (int i = 2 * approachRadius + 1; i < 32; i += 2) {
     safeContacts |= current.ZOI() & ~tooClose;
     current.Step();
-    tooClose = tooClose.ZOI(); // Is it faster to just recompute the `NZOIAround`?
+    // Is it faster to just recompute the `NZOIAround`?
+    tooClose = tooClose.ZOI();
   }
 
   // Now invalidate every placement that isn't safe
@@ -865,13 +881,14 @@ void RunSearch(const SearchParams &params, const SearchData &data,
   }
 }
 
-std::vector<LifeState> CalculateCollisionMasks(const std::vector<CatalystData> &catalysts) {
+std::vector<LifeState>
+CalculateCollisionMasks(const std::vector<CatalystData> &catalysts) {
   unsigned count = catalysts.size();
-  std::vector<LifeState> result(count*count);
+  std::vector<LifeState> result(count * count);
   for (unsigned s = 0; s < count; s++) {
-      for (unsigned t = 0; t < count; t++) {
-        result[s * count + t] = catalysts[s].CollisionMask(catalysts[t]);
-      }
+    for (unsigned t = 0; t < count; t++) {
+      result[s * count + t] = catalysts[s].CollisionMask(catalysts[t]);
+    }
   }
   return result;
 }
@@ -902,24 +919,24 @@ void SearchNode::BlockEarlyInteractions(const SearchParams &params,
 }
 
 SearchNode::SearchNode(const SearchParams &params, const SearchData &data) {
-    config = Configuration();
-    lookahead = Lookahead();
+  config = Configuration();
+  lookahead = Lookahead();
 
-    config.state = params.state.state;
-    lookahead.state = params.state.state;
-    lookahead.stationaryCountdown.n = params.maxStationaryTime;
+  config.state = params.state.state;
+  lookahead.state = params.state.state;
+  lookahead.stationaryCountdown.n = params.maxStationaryTime;
 
-    config.state.InteractionCounts(history1, history2,
-                                             historyM);
-    constraints = std::vector<CatalystConstraints>(data.catalysts.size(),
-                                                   CatalystConstraints());
+  config.state.InteractionCounts(history1, history2, historyM);
+  constraints = std::vector<CatalystConstraints>(data.catalysts.size(),
+                                                 CatalystConstraints());
 
-    if (!params.state.history.IsEmpty()) {
-      for (unsigned i = 0; i < data.catalysts.size(); i++) {
-        constraints[i].tried |= data.catalysts[i].state.Mirrored().Convolve(~params.state.history);
-      }
+  if (!params.state.history.IsEmpty()) {
+    for (unsigned i = 0; i < data.catalysts.size(); i++) {
+      constraints[i].tried |=
+          data.catalysts[i].state.Mirrored().Convolve(~params.state.history);
     }
   }
+}
 
 int main(int, char *argv[]) {
   auto toml = toml::parse(argv[1]);
@@ -944,4 +961,9 @@ int main(int, char *argv[]) {
   search.BlockEarlyInteractions(params, data);
 
   RunSearch(params, data, search);
+  std::cout << "Bloom filter population: " << data.bloom->items << std::endl;
+  std::cout << "Bloom filter approx    : "
+            << data.bloom->ApproximatePopulation() << std::endl;
+  std::cout << "Bloom filter error rate: " << data.bloom->ApproximateErrorRate()
+            << std::endl;
 }

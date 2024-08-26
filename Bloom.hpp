@@ -26,7 +26,8 @@ struct LifeBloom {
 };
 
 inline void LifeBloom::Insert(const LifeState &state) {
-  auto [baseHash1, baseHash2] = XXH3_128bits_withSeed(state.state, 8 * N, bloomSeed);
+  auto [baseHash1, baseHash2] =
+      XXH3_128bits_withSeed(state.state, 8 * N, bloomSeed);
 
   for (unsigned i = 0; i < bloomHashes; i++) {
     unsigned hash = (baseHash1 + i * baseHash2) % bloomSize;
@@ -37,7 +38,8 @@ inline void LifeBloom::Insert(const LifeState &state) {
 }
 
 inline bool LifeBloom::Lookup(const LifeState &state) const {
-  auto [baseHash1, baseHash2] = XXH3_128bits_withSeed(state.state, 8 * N, bloomSeed);
+  auto [baseHash1, baseHash2] =
+      XXH3_128bits_withSeed(state.state, 8 * N, bloomSeed);
 
   for (unsigned i = 0; i < bloomHashes; i++) {
     unsigned hash = (baseHash1 + i * baseHash2) % bloomSize;
@@ -49,7 +51,8 @@ inline bool LifeBloom::Lookup(const LifeState &state) const {
 }
 
 inline bool LifeBloom::InsertAndLookup(const LifeState &state) {
-  auto [baseHash1, baseHash2] = XXH3_128bits_withSeed(state.state, 8 * N, bloomSeed);
+  auto [baseHash1, baseHash2] =
+      XXH3_128bits_withSeed(state.state, 8 * N, bloomSeed);
 
   bool seen = true;
   for (unsigned i = 0; i < bloomHashes; i++) {
@@ -74,6 +77,7 @@ inline unsigned LifeBloom::ApproximatePopulation() const {
 }
 
 inline float LifeBloom::ApproximateErrorRate() const {
-  float perhash = -std::expm1(-(float)bloomHashes * (float)items / (float)bloomSize);
+  float perhash =
+      -std::expm1(-(float)bloomHashes * (float)items / (float)bloomSize);
   return std::pow(perhash, bloomHashes);
 }

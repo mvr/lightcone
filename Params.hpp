@@ -7,10 +7,7 @@
 #include "LifeAPI/LifeAPI.hpp"
 #include "LifeAPI/LifeHistoryState.hpp"
 
-enum class FilterType {
-  EXACT,
-  EVER
-};
+enum class FilterType { EXACT, EVER };
 
 // TODO
 struct Filter {
@@ -58,14 +55,14 @@ CatalystParams CatalystParams::FromToml(toml::value &toml) {
     approach = LifeHistoryState::Parse(approachrle);
   }
 
-  std::vector<int> recoveryRange = toml::find_or<std::vector<int>>(toml, "recovery-range", {0, 100});
+  std::vector<int> recoveryRange =
+      toml::find_or<std::vector<int>>(toml, "recovery-range", {0, 100});
   unsigned minRecoveryTime = recoveryRange[0];
   unsigned maxRecoveryTime = recoveryRange[1];
 
   return {state, required, approach, std::vector<LifeState>(),
       minRecoveryTime, maxRecoveryTime, transparent};
 }
-
 
 struct SearchParams {
   std::vector<CatalystParams> catalysts;
@@ -111,11 +108,13 @@ SearchParams SearchParams::FromToml(toml::value &toml) {
   params.maxTransparent = toml::find_or(toml, "max-transparent", 0);
   params.minStableTime = toml::find_or(toml, "min-stable-time", 8);
 
-  std::vector<int> firstRange = toml::find_or<std::vector<int>>(toml, "first-active-range", {0, 100});
+  std::vector<int> firstRange =
+      toml::find_or<std::vector<int>>(toml, "first-active-range", {0, 100});
   params.minFirstActiveGen = firstRange[0];
   params.maxFirstActiveGen = firstRange[1];
 
-  std::vector<int> windowRange = toml::find_or<std::vector<int>>(toml, "active-window-range", {0, 100});
+  std::vector<int> windowRange =
+      toml::find_or<std::vector<int>>(toml, "active-window-range", {0, 100});
   params.minActiveWindowGens = windowRange[0];
   params.maxActiveWindowGens = windowRange[1];
 
@@ -131,23 +130,25 @@ SearchParams SearchParams::FromToml(toml::value &toml) {
 
   if (toml.contains("catalyst")) {
     auto catalysts = toml::find<std::vector<toml::value>>(toml, "catalyst");
-    for(auto &c : catalysts) {
+    for (auto &c : catalysts) {
       params.catalysts.push_back(CatalystParams::FromToml(c));
     }
   }
-  
-  if(toml.contains("filter")) {
+
+  if (toml.contains("filter")) {
     params.hasFilter = true;
 
     auto filters = toml::find<std::vector<toml::value>>(toml, "filter");
-    for(auto &f : filters) {
+    for (auto &f : filters) {
       std::string rle = toml::find_or<std::string>(f, "filter", "");
-      std::vector<int> filterCenterVec = toml::find_or<std::vector<int>>(f, "filter-pos", {0, 0});
+      std::vector<int> filterCenterVec =
+          toml::find_or<std::vector<int>>(f, "filter-pos", {0, 0});
       LifeHistoryState pat = LifeHistoryState::Parse(rle);
       unsigned filterGen = toml::find_or(f, "filter-gen", -1);
 
       FilterType filterType;
-      std::string filterTypeStr = toml::find_or<std::string>(f, "filter-type", "EVER");
+      std::string filterTypeStr =
+          toml::find_or<std::string>(f, "filter-type", "EVER");
       if (filterTypeStr == "EXACT") {
         filterType = FilterType::EXACT;
       }
@@ -163,14 +164,14 @@ SearchParams SearchParams::FromToml(toml::value &toml) {
     params.hasFilter = false;
   }
 
-  if(toml.contains("forbidden")) {
+  if (toml.contains("forbidden")) {
     params.hasForbidden = true;
 
     auto forbiddens = toml::find<std::vector<toml::value>>(toml, "forbidden");
-    for(auto &f : forbiddens) {
+    for (auto &f : forbiddens) {
       std::string rle = toml::find_or<std::string>(f, "forbidden", "");
       std::vector<int> forbiddenCenterVec =
-        toml::find_or<std::vector<int>>(f, "forbidden-pos", {0, 0});
+          toml::find_or<std::vector<int>>(f, "forbidden-pos", {0, 0});
       LifeHistoryState pat = LifeHistoryState::Parse(rle);
 
       pat.Move(forbiddenCenterVec[0], forbiddenCenterVec[1]);
@@ -182,7 +183,7 @@ SearchParams SearchParams::FromToml(toml::value &toml) {
   }
 
   params.debug = toml::find_or(toml, "debug", false);
-  
+
   if (toml.contains("oracle")) {
     std::string oraclerle = toml::find<std::string>(toml, "oracle");
     LifeHistoryState oracle = LifeHistoryState::Parse(oraclerle);
@@ -199,4 +200,3 @@ SearchParams SearchParams::FromToml(toml::value &toml) {
 
   return params;
 }
-
