@@ -84,6 +84,8 @@ struct SearchParams {
   unsigned maxActiveWindowGens;
   unsigned maxStationaryTime;
 
+  bool useBloomFilter;
+
   bool hasFilter;
   std::vector<Filter> filters;
 
@@ -118,6 +120,8 @@ SearchParams SearchParams::FromToml(toml::value &toml) {
   params.maxActiveWindowGens = windowRange[1];
 
   params.maxStationaryTime = toml::find_or(toml, "max-stationary-time", 0);
+
+  params.useBloomFilter = toml::find_or(toml, "use-bloom-filter", false);
 
   params.outputFile = toml::find_or(toml, "output-file", "lightcone-output.rle");
 

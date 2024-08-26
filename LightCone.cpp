@@ -6,12 +6,14 @@
 
 #include "Params.hpp"
 #include "Countdown.hpp"
+#include "Bloom.hpp"
 
 const bool debug = false;
 const bool print_progress = true;
 
 const unsigned approachRadius = 1; // Needs to match catalyst input
 // const unsigned perturbationLookahead = 5; // TODO
+const unsigned bloomThreshold = 12; // Min population
 
 const unsigned maxStationaryGens = 32 - 1;
 
@@ -223,12 +225,14 @@ LifeState CatalystData::CollisionMask(const CatalystData &b) const {
 struct SearchData {
   std::vector<CatalystData> catalysts;
   std::vector<LifeState> collisionMasks;
+  LifeBloom *bloom;
 };
 
 
 struct Placement {
   std::pair<int, int> pos;
   unsigned catalystIx;
+  unsigned gen;
 };
 
 struct Perturbation {
@@ -246,11 +250,13 @@ struct Configuration {
   unsigned numCatalysts;
   unsigned numTransparent;
 
+  unsigned lastInteraction;
+
   std::vector<Placement> placements;
   std::vector<LifeTarget> targets; // Pre-shifted catalysts
 
   Configuration()
-      : state{}, catalysts{}, required{}, numCatalysts{0}, numTransparent{0},
+      : state{}, catalysts{}, required{}, numCatalysts{0}, numTransparent{0}, lastInteraction{0},
         placements{}, targets{} {}
 };
 
@@ -263,6 +269,7 @@ enum struct ProblemType {
   NO_REACTION,
   NOT_TRANSPARENT,
   STATIONARY,
+  BLOOM_SEEN,
 };
 
 std::ostream& operator<<(std::ostream& out, const ProblemType value){
@@ -276,6 +283,7 @@ std::ostream& operator<<(std::ostream& out, const ProblemType value){
     case ProblemType::NO_REACTION: return "NO_REACTION";
     case ProblemType::NOT_TRANSPARENT: return "NOT_TRANSPARENT";
     case ProblemType::STATIONARY:       return "STATIONARY";
+    case ProblemType::BLOOM_SEEN:       return "BLOOM_SEEN";
     }
   }();
 }
@@ -311,6 +319,10 @@ struct Lookahead {
   void Step(const Configuration &config);
   Problem Problem(const SearchParams &params, const SearchData &data,
                   const Configuration &config) const;
+
+  bool Bloomable(const Configuration &config) const;
+
+  LifeState BloomKey(const Configuration &config) const;
 };
 
 void Lookahead::Step(const Configuration &config) {
@@ -402,7 +414,25 @@ Problem Lookahead::Problem(const SearchParams &params, const SearchData &data,
       }
     }
 
+    if (params.useBloomFilter && Bloomable(config)) {
+      LifeState key = BloomKey(config);
+      if (key.GetPop() > bloomThreshold) {
+        bool seen = data.bloom->Lookup(key);
+        if (seen)
+          return {{-1, -1}, gen, ProblemType::BLOOM_SEEN};
+      }
+    }
+
     return {{-1, -1}, gen, ProblemType::NONE};
+}
+
+bool Lookahead::Bloomable(const Configuration &config) const {
+  return gen > config.lastInteraction + 2;
+}
+
+// TODO: this doesn't work well for catalysts with long internal recoveries
+LifeState Lookahead::BloomKey(const Configuration &config) const {
+  return state & ~config.catalysts;
 }
 
 
@@ -417,6 +447,7 @@ LifeState Problem::LightCone(unsigned currentgen) {
   case ProblemType::STATIONARY:
     return LifeState::NZOIAround(cell, gen - currentgen);
   case ProblemType::NO_REACTION:
+  case ProblemType::BLOOM_SEEN:
     return ~LifeState();
   case ProblemType::NONE:
   case ProblemType::WINNER:
@@ -492,6 +523,13 @@ Problem TryAdvance(const SearchParams &params, const SearchData &data,
       search.historyM |= currentCountM;
 
       if constexpr (debug) std::cout << "Advanced to " << search.lookahead.state << std::endl;
+
+      // TODO: reduce duplication
+      if (params.useBloomFilter && search.lookahead.Bloomable(search.config)) {
+        LifeState key = search.lookahead.BloomKey(search.config);
+        if (key.GetPop() > bloomThreshold)
+          data.bloom->Insert(key);
+      }
     } else {
       break;
     }
@@ -510,6 +548,13 @@ Problem TryAdvance(const SearchParams &params, const SearchData &data,
 
     if (problem.type != ProblemType::NONE)
       return problem;
+
+    // TODO: reduce duplication
+    if (params.useBloomFilter && lookahead.Bloomable(search.config)) {
+      LifeState key = lookahead.BloomKey(search.config);
+      if (key.GetPop() > bloomThreshold)
+        data.bloom->Insert(key);
+    }
   }
 }
 
@@ -641,7 +686,7 @@ std::vector<Placement> CollectPlacements(const SearchParams &params,
           continue;
         }
 
-        Placement p = {cell, i};
+        Placement p = {cell, i, g};
 
         if (catalyst.contactType == contactType && search.constraints[i].knownPlaceable.Get(cell)) {
           result.push_back(p);
@@ -680,7 +725,7 @@ std::vector<Placement> CollectPlacements(const SearchParams &params,
 
           for (auto cell = newContactPoints.FirstOn(); cell != std::make_pair(-1, -1);
                newContactPoints.Erase(cell), cell = newContactPoints.FirstOn()) {
-            Placement p = {cell, i};
+            Placement p = {cell, i, g};
             result.push_back(p);
           }
         }
@@ -718,6 +763,7 @@ void MakePlacement(const SearchParams &params, const SearchData &data,
 
   search.config.numCatalysts++;
   if(catalystdata.transparent) search.config.numTransparent++;
+  search.config.lastInteraction = std::max(search.config.lastInteraction, placement.gen);
   search.config.state |= catalyst;
   search.config.catalysts |= catalyst;
   search.config.required |= catalystdata.required.Moved(placement.pos);
@@ -780,7 +826,8 @@ void RunSearch(const SearchParams &params, const SearchData &data,
       LifeState problemGen = search.lookahead.state;
       problemGen.Step(problem.gen - search.lookahead.gen);
       std::cout << "Current problem: " << problem << std::endl << LifeHistoryState(problemGen, LifeState(), LifeState::Cell(problem.cell)) << std::endl;
-
+      std::cout << "Bloom filter population: " << data.bloom->items << std::endl;
+      std::cout << "Bloom filter error rate: " << data.bloom->ApproximateErrorRate() << std::endl;
       std::cout << "Current placements:" << std::endl;
       LifeState progression = params.state.state;
       for (auto &p : search.config.placements) {
@@ -816,17 +863,14 @@ void RunSearch(const SearchParams &params, const SearchData &data,
   std::vector<Perturbation> perturbations =
       CollatePerturbations(params, data, search, placements);
 
-  for (auto &p : perturbations) {
+  for (const auto &p : perturbations) {
+    // TODO: there may be repeat placements due to transparent catalysts
+    if (search.constraints[p.primary.catalystIx].tried.Get(p.primary.pos))
+      continue;
+
     for (auto &placement : p.placements) {
       search.constraints[placement.catalystIx].tried.Set(placement.pos);
     }
-  }
-
-  // for (const auto &p : perturbations) {
-  for (const auto &p : std::ranges::reverse_view(perturbations)) {
-    // TODO: there may be repeat placements due to transparent catalysts
-    if (!search.constraints[p.primary.catalystIx].tried.Get(p.primary.pos))
-      continue;
 
     SearchNode newSearch = search;
 
@@ -843,10 +887,6 @@ void RunSearch(const SearchParams &params, const SearchData &data,
     ResetLightcone(params, data, newSearch, p);
 
     RunSearch(params, data, newSearch);
-
-    for (auto &placement : p.placements) {
-      search.constraints[placement.catalystIx].tried.Erase(placement.pos);
-    }
   }
 }
 
@@ -918,7 +958,11 @@ int main(int, char *argv[]) {
 
   std::vector<LifeState> masks = CalculateCollisionMasks(catalystdata);
 
-  SearchData data = {catalystdata, masks};
+  LifeBloom *bloom = 0;
+  if (params.useBloomFilter)
+    bloom = new LifeBloom();
+
+  SearchData data = {catalystdata, masks, bloom};
 
   SearchNode search(params, data);
 
