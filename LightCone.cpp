@@ -1,4 +1,5 @@
 #include <vector>
+#include <ranges>
 
 #include "LifeAPI/LifeAPI.hpp"
 #include "LifeAPI/Symmetry.hpp"
@@ -766,33 +767,6 @@ void ResetLightcone(const SearchParams &params, const SearchData &data,
 }
 
 void RunSearch(const SearchParams &params, const SearchData &data,
-               SearchNode &search);
-
-void BranchPerturbation(const SearchParams &params, const SearchData &data,
-                        SearchNode &search, const Perturbation &p) {
-
-  for (auto &placement : p.placements) {
-    search.constraints[placement.catalystIx].tried.Set(placement.pos);
-  }
-
-  SearchNode newSearch = search;
-
-  MakePlacement(params, data, newSearch, p);
-
-
-  if constexpr (debug) if (params.hasOracle && !(newSearch.config.state & ~params.oracle).IsEmpty())
-    return;
-
-  if constexpr (debug) std::cout << "Branching: " << p.primary.catalystIx << std::endl;
-
-  ResetLightcone(params, data, newSearch, p);
-
-  // TODO?
-
-  RunSearch(params, data, newSearch);
-}
-
-void RunSearch(const SearchParams &params, const SearchData &data,
                SearchNode &search) {
 
   if constexpr (debug) std::cout << "Starting node: " << search.lookahead.state << std::endl;
@@ -844,11 +818,36 @@ void RunSearch(const SearchParams &params, const SearchData &data,
       CollatePerturbations(params, data, search, placements);
 
   for (auto &p : perturbations) {
+    for (auto &placement : p.placements) {
+      search.constraints[placement.catalystIx].tried.Set(placement.pos);
+    }
+  }
+
+  // for (const auto &p : perturbations) {
+  for (const auto &p : std::ranges::reverse_view(perturbations)) {
     // TODO: there may be repeat placements due to transparent catalysts
-    if (search.constraints[p.primary.catalystIx].tried.Get(p.primary.pos))
+    if (!search.constraints[p.primary.catalystIx].tried.Get(p.primary.pos))
       continue;
 
-    BranchPerturbation(params, data, search, p);
+    SearchNode newSearch = search;
+
+    MakePlacement(params, data, newSearch, p);
+
+    if constexpr (debug)
+      if (params.hasOracle &&
+          !(newSearch.config.state & ~params.oracle).IsEmpty())
+        return;
+
+    if constexpr (debug)
+      std::cout << "Branching: " << p.primary.catalystIx << std::endl;
+
+    ResetLightcone(params, data, newSearch, p);
+
+    RunSearch(params, data, newSearch);
+
+    for (auto &placement : p.placements) {
+      search.constraints[placement.catalystIx].tried.Erase(placement.pos);
+    }
   }
 }
 
