@@ -235,11 +235,6 @@ struct Placement {
   unsigned gen;
 };
 
-struct Perturbation {
-  Placement primary;
-  std::vector<Placement> placements;
-};
-
 // A set of catalyst placements
 // mvrnote: name? Solution?
 struct Configuration {
@@ -742,21 +737,8 @@ std::vector<Placement> CollectPlacements(const SearchParams &params,
   return result;
 }
 
-std::vector<Perturbation>
-CollatePerturbations(const SearchParams &params, const SearchData &data,
-                     SearchNode &search, std::vector<Placement> &placements) {
-
-  // TODO placeholder, actually dedup the perturbations
-  std::vector<Perturbation> result;
-  for (auto &p : placements) {
-    result.push_back({p, {p}});
-  }
-  return result;
-}
-
 void MakePlacement(const SearchParams &params, const SearchData &data,
-                   SearchNode &search, const Perturbation &p) {
-  const Placement &placement = p.primary;
+                   SearchNode &search, const Placement &placement) {
   const CatalystData &catalystdata = data.catalysts[placement.catalystIx];
 
   const LifeState catalyst = catalystdata.state.Moved(placement.pos);
@@ -784,9 +766,7 @@ void MakePlacement(const SearchParams &params, const SearchData &data,
 }
 
 void ResetLightcone(const SearchParams &params, const SearchData &data,
-                    SearchNode &search, const Perturbation &p) {
-  const Placement &placement = p.primary;
-
+                    SearchNode &search, const Placement &placement) {
   // TODO: Assuming that the placement has already been made
   LifeState current = search.lookahead.state;
 
@@ -860,21 +840,16 @@ void RunSearch(const SearchParams &params, const SearchData &data,
   std::vector<Placement> placements =
       CollectPlacements(params, data, search, problem);
 
-  std::vector<Perturbation> perturbations =
-      CollatePerturbations(params, data, search, placements);
-
-  for (const auto &p : perturbations) {
+  for (const auto &placement : placements) {
     // TODO: there may be repeat placements due to transparent catalysts
-    if (search.constraints[p.primary.catalystIx].tried.Get(p.primary.pos))
+    if (search.constraints[placement.catalystIx].tried.Get(placement.pos))
       continue;
 
-    for (auto &placement : p.placements) {
-      search.constraints[placement.catalystIx].tried.Set(placement.pos);
-    }
+    search.constraints[placement.catalystIx].tried.Set(placement.pos);
 
     SearchNode newSearch = search;
 
-    MakePlacement(params, data, newSearch, p);
+    MakePlacement(params, data, newSearch, placement);
 
     if constexpr (debug)
       if (params.hasOracle &&
@@ -882,9 +857,9 @@ void RunSearch(const SearchParams &params, const SearchData &data,
         return;
 
     if constexpr (debug)
-      std::cout << "Branching: " << p.primary.catalystIx << std::endl;
+      std::cout << "Branching: " << placement.catalystIx << std::endl;
 
-    ResetLightcone(params, data, newSearch, p);
+    ResetLightcone(params, data, newSearch, placement);
 
     RunSearch(params, data, newSearch);
   }
