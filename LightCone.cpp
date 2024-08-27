@@ -443,11 +443,11 @@ LifeState Problem::LightCone(unsigned currentgen) {
   case ProblemType::NOT_TRANSPARENT:
   case ProblemType::STATIONARY:
     return LifeState::NZOIAround(cell, gen - currentgen);
+  case ProblemType::WINNER:
   case ProblemType::NO_REACTION:
   case ProblemType::BLOOM_SEEN:
     return ~LifeState();
   case ProblemType::NONE:
-  case ProblemType::WINNER:
     __builtin_unreachable();
   }
 }
@@ -857,7 +857,6 @@ void RunSearch(const SearchParams &params, const SearchData &data,
         std::cout << "Placement: " << p.catalystIx << " at (" << p.pos.first << ", " << p.pos.second << ")" << std::endl;
       }
     }
-    return;
   }
 
   if (search.config.numCatalysts == params.maxCatalysts)
