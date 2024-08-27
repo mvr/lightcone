@@ -876,10 +876,13 @@ void RunSearch(const SearchParams &params, const SearchData &data,
 
     MakePlacement(params, data, newSearch, placement);
 
-    if constexpr (debug)
-      if (params.hasOracle &&
-          !(newSearch.config.state & ~params.oracle).IsEmpty())
-        return;
+    if constexpr (debug) {
+      if (params.hasOracle && !(newSearch.config.state & ~params.oracle).IsEmpty()) {
+        if constexpr (debug)
+          std::cout << "Oracle failed: " << newSearch.lookahead.state << std::endl;
+        continue;
+      }
+    }
 
     if constexpr (debug)
       std::cout << "Branching: " << placement.catalystIx << std::endl;
