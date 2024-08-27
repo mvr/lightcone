@@ -648,6 +648,12 @@ std::vector<Placement> CollectPlacements(const SearchParams &params,
   if constexpr (debug) std::cout << "history2: " << currentHistory2 << std::endl;
   if constexpr (debug) std::cout << "historyM: " << currentHistoryM << std::endl;
 
+  LifeState somePlaceable = LifeState();
+  for (unsigned i = 0; i < data.catalysts.size(); i++) {
+    const CatalystData &catalyst = data.catalysts[i];
+    somePlaceable |= ~(search.constraints[i].tried | search.constraints[i].knownUnplaceable);
+  }
+
   for (unsigned g = search.lookahead.gen; g < problem.gen; g++) {
     if constexpr (debug) std::cout << "Gen " << g << " state: " << current << std::endl;
 
@@ -659,7 +665,7 @@ std::vector<Placement> CollectPlacements(const SearchParams &params,
                                  (currentCount2 & ~currentHistory2) |
                                  (currentCountM & ~currentHistoryM);
 
-    newContactPoints &= problem.LightCone(g);
+    newContactPoints &= problem.LightCone(g) & somePlaceable;
 
     for (auto cell = newContactPoints.FirstOn(); cell != std::make_pair(-1, -1);
          newContactPoints.Erase(cell), cell = newContactPoints.FirstOn()) {
