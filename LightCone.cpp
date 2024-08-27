@@ -264,6 +264,7 @@ enum struct ProblemType {
   REQUIRED,
   FILTER,
   UNRECOVERED,
+  TOO_LONG,
   NO_REACTION,
   NOT_TRANSPARENT,
   STATIONARY,
@@ -278,6 +279,7 @@ std::ostream &operator<<(std::ostream &out, const ProblemType value) {
     case ProblemType::REQUIRED:        return "REQUIRED";
     case ProblemType::FILTER:          return "FILTER";
     case ProblemType::UNRECOVERED:     return "UNRECOVERED";
+    case ProblemType::TOO_LONG:        return "TOO_LONG";
     case ProblemType::NO_REACTION:     return "NO_REACTION";
     case ProblemType::NOT_TRANSPARENT: return "NOT_TRANSPARENT";
     case ProblemType::STATIONARY:      return "STATIONARY";
@@ -309,6 +311,7 @@ struct Lookahead {
   bool hasInteracted;
   std::vector<unsigned> missingTime;
   std::vector<bool> catalystHasInteracted;
+  unsigned startTime;
   unsigned recoveredTime;
 
   Lookahead()
@@ -345,7 +348,10 @@ void Lookahead::Step(const Configuration &config) {
     } else {
       missingTime[i]++;
       catalystHasInteracted[i] = true;
-      hasInteracted = true;
+      if (!hasInteracted) {
+        startTime = gen;
+        hasInteracted = true;
+      }
       allPresent = false;
     }
     i++;
@@ -406,6 +412,11 @@ Problem Lookahead::Problem(const SearchParams &params, const SearchData &data,
   }
 
   {
+    if (gen > startTime + params.maxActiveWindowGens && hasInteracted)
+      return {{-1, -1}, gen, ProblemType::TOO_LONG};
+  }
+
+  {
     if (gen > params.minFirstActiveGen && hasInteracted &&
         recoveredTime > params.minStableTime) {
       return {{-1, -1}, gen, ProblemType::WINNER};
@@ -445,6 +456,7 @@ LifeState Problem::LightCone(unsigned currentgen) {
     return LifeState::NZOIAround(cell, gen - currentgen);
   case ProblemType::WINNER:
   case ProblemType::NO_REACTION:
+  case ProblemType::TOO_LONG:
   case ProblemType::BLOOM_SEEN:
     return ~LifeState();
   case ProblemType::NONE:
@@ -847,6 +859,10 @@ void RunSearch(const SearchParams &params, const SearchData &data,
   }
 
   if constexpr (debug) std::cout << "Problem: " << problem << std::endl;
+
+  if (problem.type == ProblemType::TOO_LONG) {
+    std::cout << "Too long: " << search.config.state << std::endl;
+  }
 
   if (problem.type == ProblemType::WINNER) {
     // TODO report properly!

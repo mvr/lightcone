@@ -113,8 +113,7 @@ SearchParams SearchParams::FromToml(toml::value &toml) {
   params.minFirstActiveGen = firstRange[0];
   params.maxFirstActiveGen = firstRange[1];
 
-  std::vector<int> windowRange =
-      toml::find_or<std::vector<int>>(toml, "active-window-range", {0, 100});
+  std::vector<int> windowRange = toml::find_or<std::vector<int>>(toml, "active-window-range", {0, 500});
   params.minActiveWindowGens = windowRange[0];
   params.maxActiveWindowGens = windowRange[1];
 
