@@ -821,9 +821,13 @@ void RunSearch(const SearchParams &params, const SearchData &data,
       std::cout << "Current configuration: " << search.config.state << std::endl;
       LifeState problemGen = search.lookahead.state;
       problemGen.Step(problem.gen - search.lookahead.gen);
-      std::cout << "Current problem: " << problem << std::endl << LifeHistoryState(problemGen, LifeState(), LifeState::Cell(problem.cell)) << std::endl;
-      std::cout << "Bloom filter population: " << data.bloom->items << std::endl;
-      std::cout << "Bloom filter error rate: " << data.bloom->ApproximateErrorRate() << std::endl;
+      std::cout << "Current problem: " << problem << std::endl;
+      if(problem.cell.first != -1)
+        std::cout << LifeHistoryState(problemGen, LifeState(), LifeState::Cell(problem.cell)) << std::endl;
+      if(params.useBloomFilter) {
+        std::cout << "Bloom filter population: " << data.bloom->items << std::endl;
+        std::cout << "Bloom filter error rate: " << data.bloom->ApproximateErrorRate() << std::endl;
+      }
       std::cout << "Current placements:" << std::endl;
       LifeState progression = params.state.state;
       for (auto &p : search.config.placements) {
