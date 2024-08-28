@@ -40,4 +40,21 @@ public:
     }
     finished |= carry;
   }
+
+  void TickOrReset(const LifeState &state) {
+    LifeState newStarted = state & ~started;
+    LifeState carry = state & started;
+
+    for (unsigned i = 0; i < lmax; i++) {
+      if ((n >> i) & 1) {
+        counter[i] |= newStarted;
+      } else {
+        counter[i] &= ~newStarted;
+      }
+      counter[i] ^= carry;
+      carry &= counter[i];
+    }
+    finished |= carry;
+    started = state;
+  }
 };

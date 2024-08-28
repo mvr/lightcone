@@ -334,9 +334,7 @@ void Lookahead::Step(const Configuration &config) {
 
   if (stationaryCountdown.n != 0) {
     LifeState stationary = state & ~config.catalysts;
-    stationaryCountdown.Reset(~stationary);
-    stationaryCountdown.Start(stationary);
-    stationaryCountdown.Tick();
+    stationaryCountdown.TickOrReset(stationary);
   }
 
   // Why is there no easy way to iterate with index? My kingdom for a `zip`
