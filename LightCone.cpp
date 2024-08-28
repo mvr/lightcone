@@ -492,9 +492,9 @@ LifeState Problem::LightCone(unsigned currentgen) {
   case ProblemType::WINNER:
   case ProblemType::NO_REACTION:
   case ProblemType::TOO_LONG:
-  case ProblemType::BLOOM_SEEN:
     return ~LifeState();
   case ProblemType::NONE:
+  case ProblemType::BLOOM_SEEN:
     __builtin_unreachable();
   }
 }
@@ -895,6 +895,9 @@ void RunSearch(const SearchParams &params, const SearchData &data,
 
   if constexpr (debug) std::cout << "Problem: " << problem << std::endl;
 
+  if (problem.type == ProblemType::BLOOM_SEEN)
+    return;
+  
   if (problem.type == ProblemType::TOO_LONG) {
     std::cout << "Too long: " << search.config.state << std::endl;
   }
