@@ -34,6 +34,58 @@ std::ostream &operator<<(std::ostream &out, const ContactType value) {
   }();
 }
 
+struct Approach {
+  LifeState approachOn;
+  LifeState approachOff;
+  uint64_t signature;
+  uint64_t signatureMask;
+
+  void Move(int x, int y) {
+    approachOn.Move(x, y);
+    approachOff.Move(x, y);
+    RecalculateSignature();
+  }
+
+  Approach Transformed(SymmetryTransform t) const {
+    Approach result = {approachOn.Transformed(t),
+                       approachOff.Transformed(t),
+                       0,
+                       0};
+    result.RecalculateSignature();
+    return result;
+  }
+
+  void RecalculateSignature() {
+    signature = approachOn.GetPatch<approachRadius>({0, 0});
+    signatureMask = (approachOn | approachOff).GetPatch<approachRadius>({0, 0});
+  }
+
+  bool MatchesSignature(uint64_t other) const {
+    return ((signature ^ other) & signatureMask) == 0;
+  }
+
+  static Approach FromParams(const LifeHistoryState &params);
+};
+
+Approach Approach::FromParams(const LifeHistoryState &params) {
+  LifeState catalyst = params.state & ~params.marked;
+
+  LifeState reactionWithCatalyst = params.state;
+  reactionWithCatalyst.Step();
+  reactionWithCatalyst &= ~catalyst;
+
+  LifeState reactionWithoutCatalyst = params.state & params.marked;
+  reactionWithoutCatalyst.Step();
+
+  Approach result;
+  result.approachOn = params.marked & params.state;
+  result.approachOff = (params.marked & ~params.state) | catalyst; // TODO:  | (result.required & ~result.state);
+
+  assert((result.approachOn & result.approachOff).IsEmpty());
+
+  return result;
+}
+
 struct CatalystData {
   LifeState state;
   LifeState halo;
@@ -41,14 +93,11 @@ struct CatalystData {
   LifeState history1;
   LifeState history2;
   LifeState historyM;
-  LifeState approachOn;
-  LifeState approachOff;
   LifeState historyFlipped1;
   LifeState historyFlipped2;
   LifeState historyFlippedM;
+  Approach approach;
   ContactType contactType; // At the origin contact cell
-  uint64_t signature;
-  uint64_t signatureMask;
   unsigned maxRecoveryTime;
   unsigned minRecoveryTime;
   bool transparent;
@@ -60,23 +109,21 @@ struct CatalystData {
   CatalystData Transformed(SymmetryTransform t);
 
   LifeState CollisionMask(const CatalystData &b) const;
-
-  bool MatchesSignature(uint64_t other) const {
-    return ((signature ^ other) & signatureMask) == 0;
-  }
 };
 
 CatalystData CatalystData::FromParamsNormal(CatalystParams &params) {
+  LifeHistoryState &approach = params.approaches[0];
+
   LifeState contact;
   {
-    LifeState catalyst = params.approach.state & ~params.approach.marked;
+    LifeState catalyst = approach.state & ~approach.marked;
 
-    LifeState reactionWithCatalyst = params.approach.state;
+    LifeState reactionWithCatalyst = approach.state;
     reactionWithCatalyst.Step();
     reactionWithCatalyst &= ~catalyst;
 
     LifeState reactionWithoutCatalyst =
-        params.approach.state & params.approach.marked;
+        approach.state & approach.marked;
     reactionWithoutCatalyst.Step();
 
     contact = reactionWithCatalyst ^ reactionWithoutCatalyst;
@@ -85,9 +132,9 @@ CatalystData CatalystData::FromParamsNormal(CatalystParams &params) {
   auto contactorigin = contact.FirstOn();
   // TODO: Calculate approach from the soups?
   // This tramples the contents of `params`, seems bad
-  params.approach.Move(-contactorigin.first, -contactorigin.second);
+  approach.Move(-contactorigin.first, -contactorigin.second);
 
-  params.state.AlignWith(params.approach.state & ~params.approach.marked);
+  params.state.AlignWith(approach.state & ~approach.marked);
   params.required.AlignWith(params.state);
 
   CatalystData result;
@@ -100,21 +147,19 @@ CatalystData CatalystData::FromParamsNormal(CatalystParams &params) {
   result.historyFlipped1 = result.history1.Mirrored();
   result.historyFlipped2 = result.history2.Mirrored();
   result.historyFlippedM = result.historyM.Mirrored();
-  result.approachOn = params.approach.marked & params.approach.state;
-  result.approachOff = (params.approach.marked & ~params.approach.state) |
+  result.approach.approachOn = approach.marked & approach.state;
+  result.approach.approachOff = (approach.marked & ~approach.state) |
                        result.state | (result.required & ~result.state);
 
-  assert((result.approachOn & result.approachOff).IsEmpty());
+  assert((result.approach.approachOn & result.approach.approachOff).IsEmpty());
 
-  unsigned contactCount = result.approachOn.CountNeighbours({0, 0});
+  unsigned contactCount = result.approach.approachOn.CountNeighbours({0, 0});
   result.contactType =
-      contactCount == 1
-          ? ContactType::CONTACT1
-          : (contactCount == 2 ? ContactType::CONTACT2 : ContactType::CONTACTM);
+    contactCount == 1
+      ? ContactType::CONTACT1
+      : (contactCount == 2 ? ContactType::CONTACT2 : ContactType::CONTACTM);
 
-  result.signature = result.approachOn.GetPatch<approachRadius>({0, 0});
-  result.signatureMask =
-      (result.approachOn | result.approachOff).GetPatch<approachRadius>({0, 0});
+  result.approach.RecalculateSignature();
 
   result.minRecoveryTime = params.minRecoveryTime;
   result.maxRecoveryTime = params.maxRecoveryTime;
@@ -125,8 +170,8 @@ CatalystData CatalystData::FromParamsNormal(CatalystParams &params) {
     std::cout << "Loaded catalyst: " << result.state << std::endl;
     // std::cout << "Params Approach: " << params.approach << std::endl;
     // std::cout << "Params Required: " << params.required << std::endl;
-    std::cout << "Approach On: " << LifeHistoryState(result.state, LifeState(), result.approachOn) << std::endl;
-    std::cout << "Approach Off: " << LifeHistoryState(result.state, LifeState(), result.approachOff) << std::endl;
+    std::cout << "Approach On: " << LifeHistoryState(result.state, LifeState(), result.approach.approachOn) << std::endl;
+    std::cout << "Approach Off: " << LifeHistoryState(result.state, LifeState(), result.approach.approachOff) << std::endl;
     std::cout << "Required: " << LifeHistoryState(result.state, LifeState(), result.required) << std::endl;
     std::cout << "Contact Type: " << result.contactType << std::endl;
   }
@@ -147,13 +192,13 @@ CatalystData CatalystData::FromParamsTransparent(CatalystParams &params) {
   result.historyFlipped2 = result.history2.Mirrored();
   result.historyFlippedM = result.historyM.Mirrored();
 
-  result.approachOn = LifeState();
-  result.approachOff = LifeState();
+  result.approach.approachOn = LifeState();
+  result.approach.approachOff = LifeState();
+
+  result.approach.signature = 0;
+  result.approach.signatureMask = 0;
 
   result.contactType = ContactType::TRANSPARENT;
-
-  result.signature = 0;
-  result.signatureMask = 0;
 
   result.minRecoveryTime = params.minRecoveryTime;
   result.maxRecoveryTime = params.maxRecoveryTime;
@@ -175,23 +220,15 @@ CatalystData CatalystData::Transformed(SymmetryTransform t) {
     history1.Transformed(t),
     history2.Transformed(t),
     historyM.Transformed(t),
-    approachOn.Transformed(t),
-    approachOff.Transformed(t),
     historyFlipped1.Transformed(t),
     historyFlipped2.Transformed(t),
     historyFlippedM.Transformed(t),
+    approach.Transformed(t),
     contactType,
-    signature,
-    signatureMask,
     maxRecoveryTime,
     minRecoveryTime,
     transparent
   };
-
-  // Needs to be recalculated
-  result.signature = result.approachOn.GetPatch<approachRadius>({0, 0});
-  result.signatureMask =
-      (result.approachOn | result.approachOff).GetPatch<approachRadius>({0, 0});
 
   return result;
 }
@@ -598,11 +635,11 @@ PlacementValidity TestPlacement(const SearchData &data, SearchNode &search,
   if (catalyst.contactType != contactType)
     return PlacementValidity::INVALID_CONTACT;
 
-  if (!catalyst.MatchesSignature(signature))
+  if (!catalyst.approach.MatchesSignature(signature))
     return PlacementValidity::FAILED_CONTACT;
 
-  LifeState mismatches = (catalyst.approachOn.Moved(p.pos) & ~state) |
-                         (catalyst.approachOff.Moved(p.pos) & state);
+  LifeState mismatches = (catalyst.approach.approachOn.Moved(p.pos) & ~state) |
+                         (catalyst.approach.approachOff.Moved(p.pos) & state);
 
   if (!mismatches.IsEmpty()) {
     constexpr LifeState originMask =
@@ -694,7 +731,7 @@ std::vector<Placement> CollectPlacements(const SearchParams &params,
         if (catalyst.contactType != contactType)
           continue;
 
-        if (!catalyst.MatchesSignature(signature)) {
+        if (!catalyst.approach.MatchesSignature(signature)) {
           search.constraints[i].knownUnplaceable.Set(cell);
           continue;
         }

@@ -26,7 +26,7 @@ struct Forbidden {
 struct CatalystParams {
   LifeState state;
   LifeHistoryState required;
-  LifeHistoryState approach;
+  std::vector<LifeHistoryState> approaches;
   std::vector<LifeState> soups;
 
   unsigned minRecoveryTime;
@@ -44,23 +44,29 @@ CatalystParams CatalystParams::FromToml(toml::value &toml) {
   bool transparent = toml::find_or(toml, "transparent", false);
 
   LifeHistoryState required;
-  LifeHistoryState approach;
+  std::vector<LifeHistoryState> approaches;
 
   if (!transparent) {
     // Not required if the catalyst is transparent
     std::string requiredrle = toml::find<std::string>(toml, "required");
-    std::string approachrle = toml::find<std::string>(toml, "approach");
-
     required = LifeHistoryState::Parse(requiredrle);
-    approach = LifeHistoryState::Parse(approachrle);
-  }
 
+    if(toml.contains("approach")) {
+      std::string rle = toml::find<std::string>(toml, "approach");
+      approaches.push_back(LifeHistoryState::Parse(rle));
+    }
+    if(toml.contains("approaches")) {
+      std::vector<std::string> approachrles = toml::find<std::vector<std::string>>(toml, "approaches");
+      for (std::string &rle : approachrles)
+        approaches.push_back(LifeHistoryState::Parse(rle));
+    }
+  }
   std::vector<int> recoveryRange =
       toml::find_or<std::vector<int>>(toml, "recovery-range", {0, 100});
   unsigned minRecoveryTime = recoveryRange[0];
   unsigned maxRecoveryTime = recoveryRange[1];
 
-  return {state, required, approach, std::vector<LifeState>(),
+  return {state, required, approaches, std::vector<LifeState>(),
       minRecoveryTime, maxRecoveryTime, transparent};
 }
 
