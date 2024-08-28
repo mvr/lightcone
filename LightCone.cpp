@@ -525,8 +525,6 @@ struct SearchNode {
   void Step(const SearchParams &params, const SearchData &data);
 };
 
-// TODO: determine exactly when this needs to be run.
-// Is it after the final perturbation?
 Problem TryAdvance(const SearchParams &params, const SearchData &data,
                    const Configuration &config, SearchNode &search) {
   if constexpr (debug) std::cout << "Trying to advance: " << search.lookahead.state << std::endl;
@@ -863,7 +861,7 @@ void ResetLightcone(const SearchParams &params, const SearchData &data,
 void RunSearch(const SearchParams &params, const SearchData &data,
                SearchNode &search) {
 
-  if constexpr (debug) std::cout << "Starting node: " << search.lookahead.state << std::endl;
+  if constexpr (debug) std::cout << "Starting node: " << search.config.state << std::endl;
 
   Problem problem = TryAdvance(params, data, search.config, search);
 
@@ -893,7 +891,14 @@ void RunSearch(const SearchParams &params, const SearchData &data,
     }
   }
 
-  if constexpr (debug) std::cout << "Problem: " << problem << std::endl;
+  if constexpr (debug) {
+    std::cout << "Problem: " << problem << std::endl;
+    if (problem.cell.first != -1) {
+      LifeState problemGen = search.lookahead.state;
+      problemGen.Step(problem.gen - search.lookahead.gen);
+      std::cout << LifeHistoryState(problemGen, LifeState(), LifeState::Cell(problem.cell)) << std::endl;
+    }
+  }
 
   if (problem.type == ProblemType::BLOOM_SEEN)
     return;
@@ -1027,9 +1032,11 @@ int main(int, char *argv[]) {
   search.BlockEarlyInteractions(params, data);
 
   RunSearch(params, data, search);
-  std::cout << "Bloom filter population: " << data.bloom->items << std::endl;
-  std::cout << "Bloom filter approx    : "
-            << data.bloom->ApproximatePopulation() << std::endl;
-  std::cout << "Bloom filter error rate: " << data.bloom->ApproximateErrorRate()
-            << std::endl;
+  if (params.useBloomFilter) {
+    std::cout << "Bloom filter population: " << data.bloom->items << std::endl;
+    std::cout << "Bloom filter approx    : "
+              << data.bloom->ApproximatePopulation() << std::endl;
+    std::cout << "Bloom filter error rate: "
+              << data.bloom->ApproximateErrorRate() << std::endl;
+  }
 }
