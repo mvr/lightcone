@@ -552,6 +552,21 @@ Problem TryAdvance(const SearchParams &params, const SearchData &data,
         LifeState remainingPlacements =
             newContactPoints & ~(search.constraints[i].knownUnplaceable |
                                  search.constraints[i].tried);
+
+        switch (catalyst.contactType) {
+        case CONTACT1:
+          remainingPlacements &= currentCount1;
+          break;
+        case CONTACT2:
+          remainingPlacements &= currentCount2;
+          break;
+        case CONTACTM:
+          remainingPlacements &= currentCountM;
+          break;
+        case TRANSPARENT:
+          break;
+        }
+
         if (!remainingPlacements.IsEmpty()) {
           needAdvance = false;
           break;
