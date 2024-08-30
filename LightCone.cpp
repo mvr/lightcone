@@ -260,7 +260,13 @@ std::vector<CatalystData> CatalystData::FromParams(CatalystParams &params) {
 }
 
 LifeState CatalystData::CollisionMask(const CatalystData &b) const {
-  return state.InteractionOffsets(b.state);
+  // Block immediate births
+  LifeState result = state.InteractionOffsets(b.state);
+
+  // Block active interacting with required
+  result |= (state.ZOI() & ~required).Convolve(b.required.Mirrored());
+
+  return result;
 }
 
 // Any precomputed data, constant at every node
