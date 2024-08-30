@@ -651,8 +651,10 @@ PlacementValidity TestPlacement(const SearchData &data, SearchNode &search,
   if (!catalyst.approach.MatchesSignature(signature))
     return PlacementValidity::FAILED_CONTACT;
 
-  LifeState mismatches = (catalyst.approach.approachOn.Moved(p.pos) & ~state) |
-                         (catalyst.approach.approachOff.Moved(p.pos) & state);
+  LifeState centered = state.Moved(-p.pos.first, -p.pos.second);
+
+  LifeState mismatches = (catalyst.approach.approachOn & ~centered) |
+                         (catalyst.approach.approachOff & centered);
 
   if (!mismatches.IsEmpty()) {
     constexpr LifeState originMask =
@@ -669,8 +671,8 @@ PlacementValidity TestPlacement(const SearchData &data, SearchNode &search,
   // Check whether this catalyst actually would have interacted in a previous
   // generation
   LifeState pastinteractions =
-      (catalyst.history1.Moved(p.pos) & historyCount2) |
-      (catalyst.history2.Moved(p.pos) & historyCount1);
+      (catalyst.history1 & historyCount2.Moved(-p.pos.first, -p.pos.second)) |
+      (catalyst.history2 & historyCount1.Moved(-p.pos.first, -p.pos.second));
   if (!pastinteractions.IsEmpty()) {
     constexpr LifeState originMask =
         LifeState::NZOIAround({0, 0}, approachRadius);
@@ -681,10 +683,10 @@ PlacementValidity TestPlacement(const SearchData &data, SearchNode &search,
     }
   }
 
-  // Check whether the cataylst's `required` is violated next generation
-  LifeState immediatebirths = (catalyst.history1.Moved(p.pos) & currentCount2) |
-                              (catalyst.history2.Moved(p.pos) & currentCount1);
-  immediatebirths &= (catalyst.required & ~catalyst.state).Moved(p.pos);
+  // Check whether the catalyst's `required` is violated next generation
+  LifeState immediatebirths = (catalyst.history1 & currentCount2.Moved(-p.pos.first, -p.pos.second)) |
+                              (catalyst.history2 & currentCount1.Moved(-p.pos.first, -p.pos.second));
+  immediatebirths &= (catalyst.required & ~catalyst.state);
   if (!immediatebirths.IsEmpty())
     return PlacementValidity::FAILED_ELSEWHERE;
 
