@@ -9,6 +9,7 @@
 
 const bool debug = false;
 const bool print_progress = true;
+const unsigned print_progress_frequency = 100000;
 
 const unsigned approachRadius = 1; // Needs to match catalyst input
 // const unsigned perturbationLookahead = 5; // TODO
@@ -883,7 +884,7 @@ void RunSearch(const SearchParams &params, const SearchData &data,
   if constexpr (print_progress) {
     static unsigned counter = 0;
     counter++;
-    if (counter == 1000000) [[unlikely]] {
+    if (counter == print_progress_frequency) [[unlikely]] {
       std::cout << "Current configuration: " << search.config.state << std::endl;
       LifeState problemGen = search.lookahead.state;
       problemGen.Step(problem.gen - search.lookahead.gen);
