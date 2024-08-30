@@ -575,22 +575,21 @@ Problem TryAdvance(const SearchParams &params, const SearchData &data,
       }
     }
 
-    if (needAdvance) {
-      search.lookahead.Step(search.config);
-      search.history1 |= currentCount1;
-      search.history2 |= currentCount2;
-      search.historyM |= currentCountM;
-
-      if constexpr (debug) std::cout << "Advanced to " << search.lookahead.state << std::endl;
-
-      // TODO: reduce duplication
-      if (params.useBloomFilter && search.lookahead.Bloomable(search.config)) {
-        LifeState key = search.lookahead.BloomKey(search.config);
-        if (key.GetPop() > bloomThreshold)
-          data.bloom->Insert(key);
-      }
-    } else {
+    if (!needAdvance)
       break;
+
+    search.lookahead.Step(search.config);
+    search.history1 |= currentCount1;
+    search.history2 |= currentCount2;
+    search.historyM |= currentCountM;
+
+    if constexpr (debug) std::cout << "Advanced to " << search.lookahead.state << std::endl;
+
+    // TODO: reduce duplication
+    if (params.useBloomFilter && search.lookahead.Bloomable(search.config)) {
+      LifeState key = search.lookahead.BloomKey(search.config);
+      if (key.GetPop() > bloomThreshold)
+        data.bloom->Insert(key);
     }
   }
 
