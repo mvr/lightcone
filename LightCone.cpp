@@ -716,8 +716,8 @@ std::vector<Placement> CollectPlacements(const SearchParams &params,
     somePlaceable |= ~(search.constraints[i].tried | search.constraints[i].knownUnplaceable);
   }
 
-  for (unsigned g = search.lookahead.gen; g < problem.gen; g++) {
-    if constexpr (debug) std::cout << "Gen " << g << " state: " << current << std::endl;
+  for (unsigned gen = search.lookahead.gen; gen < problem.gen; gen++) {
+    if constexpr (debug) std::cout << "Gen " << gen << " state: " << current << std::endl;
 
     LifeState currentCount1(UNINITIALIZED), currentCount2(UNINITIALIZED),
         currentCountM(UNINITIALIZED);
@@ -727,7 +727,7 @@ std::vector<Placement> CollectPlacements(const SearchParams &params,
                                  (currentCount2 & ~currentHistory2) |
                                  (currentCountM & ~currentHistoryM);
 
-    newContactPoints &= problem.LightCone(g) & somePlaceable;
+    newContactPoints &= problem.LightCone(gen) & somePlaceable;
 
     for (auto cell = newContactPoints.FirstOn(); cell != std::make_pair(-1, -1);
          newContactPoints.Erase(cell), cell = newContactPoints.FirstOn()) {
@@ -756,7 +756,7 @@ std::vector<Placement> CollectPlacements(const SearchParams &params,
           continue;
         }
 
-        Placement p = {cell, i, g};
+        Placement p = {cell, i, gen};
 
         if (catalyst.contactType == contactType &&
             search.constraints[i].knownPlaceable.Get(cell)) {
@@ -799,7 +799,7 @@ std::vector<Placement> CollectPlacements(const SearchParams &params,
           for (auto cell = newContactPoints.FirstOn();
                cell != std::make_pair(-1, -1); newContactPoints.Erase(cell),
                     cell = newContactPoints.FirstOn()) {
-            Placement p = {cell, i, g};
+            Placement p = {cell, i, gen};
             result.push_back(p);
           }
         }
