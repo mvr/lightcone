@@ -495,7 +495,7 @@ LifeState Problem::LightCone(unsigned currentgen) {
   case ProblemType::UNRECOVERED:
   case ProblemType::NOT_TRANSPARENT:
   case ProblemType::STATIONARY:
-    return LifeState::NZOIAround(cell, gen - currentgen);
+    return LifeState::NZOIAround(cell, gen - currentgen - 1);
   case ProblemType::WINNER:
   case ProblemType::NO_REACTION:
   case ProblemType::TOO_LONG:
