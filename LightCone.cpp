@@ -856,12 +856,16 @@ void MakePlacement(const SearchParams &params, const SearchData &data,
 
 void ResetLightcone(const SearchParams &params, const SearchData &data,
                     SearchNode &search, const Placement &placement) {
-  // TODO: Assuming that the placement has already been made
   LifeState current = search.lookahead.state;
 
-  LifeState tooClose = LifeState::NZOIAround(placement.pos, approachRadius);
-
   LifeState safeContacts;
+
+  for (unsigned gen = search.lookahead.gen; gen < placement.gen; gen++) {
+    safeContacts |= current.ZOI();
+    current.Step();
+  }
+
+  LifeState tooClose = LifeState::NZOIAround(placement.pos, approachRadius);
 
   // Until the universe is covered
   // TODO: this is a lot of generations, is there a sensible time to stop
