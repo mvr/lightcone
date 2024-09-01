@@ -17,7 +17,7 @@ const unsigned bloomThreshold = 12; // Min population
 
 const unsigned maxStationaryGens = 32 - 1;
 
-enum ContactType {
+enum struct ContactType {
   CONTACT1,
   CONTACT2,
   CONTACTM,
@@ -561,16 +561,16 @@ Problem TryAdvance(const SearchParams &params, const SearchData &data,
                                  search.constraints[i].tried);
 
         switch (catalyst.contactType) {
-        case CONTACT1:
+        case ContactType::CONTACT1:
           remainingPlacements &= currentCount1;
           break;
-        case CONTACT2:
+        case ContactType::CONTACT2:
           remainingPlacements &= currentCount2;
           break;
-        case CONTACTM:
+        case ContactType::CONTACTM:
           remainingPlacements &= currentCountM;
           break;
-        case TRANSPARENT:
+        case ContactType::TRANSPARENT:
           break;
         }
 
@@ -740,8 +740,9 @@ std::vector<Placement> CollectPlacements(const SearchParams &params,
 
       ContactType contactType =
           currentCount1.Get(cell)
-              ? CONTACT1
-              : (currentCount2.Get(cell) ? CONTACT2 : CONTACTM);
+              ? ContactType::CONTACT1
+              : (currentCount2.Get(cell) ? ContactType::CONTACT2
+                                         : ContactType::CONTACTM);
 
       uint64_t signature = current.GetPatch<approachRadius>(cell);
 
