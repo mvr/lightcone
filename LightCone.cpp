@@ -857,13 +857,14 @@ void MakePlacement(const SearchParams &params, const SearchData &data,
 void ResetLightcone(const SearchParams &params, const SearchData &data,
                     SearchNode &search, const Placement &placement) {
   LifeState current = search.lookahead.state;
-
-  LifeState safeContacts;
+  LifeState history = search.lookahead.state;
 
   for (unsigned gen = search.lookahead.gen; gen < placement.gen; gen++) {
-    safeContacts |= current.ZOI();
     current.Step();
+    history |= current;
   }
+
+  LifeState safeContacts = history.ZOI();
 
   LifeState tooClose = LifeState::NZOIAround(placement.pos, approachRadius);
 
