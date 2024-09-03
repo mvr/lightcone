@@ -27,6 +27,7 @@ struct CatalystParams {
   LifeState state;
   LifeHistoryState required;
   std::vector<LifeHistoryState> approaches;
+  std::vector<LifeHistoryState> forbiddens;
   std::vector<LifeState> soups;
 
   unsigned minRecoveryTime;
@@ -61,12 +62,20 @@ CatalystParams CatalystParams::FromToml(toml::value &toml) {
         approaches.push_back(LifeHistoryState::Parse(rle));
     }
   }
+
+  std::vector<LifeHistoryState> forbiddens;
+  if (toml.contains("forbidden")) {
+      std::vector<std::string> forbiddenrles = toml::find<std::vector<std::string>>(toml, "forbidden");
+      for (std::string &rle : forbiddenrles)
+        forbiddens.push_back(LifeHistoryState::Parse(rle));
+  }
+
   std::vector<int> recoveryRange =
       toml::find_or<std::vector<int>>(toml, "recovery-range", {0, 100});
   unsigned minRecoveryTime = recoveryRange[0];
   unsigned maxRecoveryTime = recoveryRange[1];
 
-  return {state, required, approaches, std::vector<LifeState>(),
+  return {state, required, approaches, forbiddens, std::vector<LifeState>(),
       minRecoveryTime, maxRecoveryTime, transparent};
 }
 
@@ -167,24 +176,6 @@ SearchParams SearchParams::FromToml(toml::value &toml) {
     }
   } else {
     params.hasFilter = false;
-  }
-
-  if (toml.contains("forbidden")) {
-    params.hasForbidden = true;
-
-    auto forbiddens = toml::find<std::vector<toml::value>>(toml, "forbidden");
-    for (auto &f : forbiddens) {
-      std::string rle = toml::find_or<std::string>(f, "forbidden", "");
-      std::vector<int> forbiddenCenterVec =
-          toml::find_or<std::vector<int>>(f, "forbidden-pos", {0, 0});
-      LifeHistoryState pat = LifeHistoryState::Parse(rle);
-
-      pat.Move(forbiddenCenterVec[0], forbiddenCenterVec[1]);
-
-      params.forbiddens.push_back({pat.marked, pat.state});
-    }
-  } else {
-    params.hasForbidden = false;
   }
 
   params.debug = toml::find_or(toml, "debug", false);

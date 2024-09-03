@@ -103,6 +103,8 @@ struct CatalystData {
   unsigned minRecoveryTime;
   bool transparent;
 
+  std::vector<Approach> forbidden;
+
   static CatalystData FromParamsNormal(CatalystParams &params);
   static CatalystData FromParamsTransparent(CatalystParams &params);
   static std::vector<CatalystData> FromParams(CatalystParams &params);
@@ -153,6 +155,15 @@ CatalystData CatalystData::FromParamsNormal(CatalystParams &params) {
                        result.state | (result.required & ~result.state);
 
   assert((result.approach.approachOn & result.approach.approachOff).IsEmpty());
+
+  for (auto &forbiddenpat : params.forbiddens) {
+    Approach approach;
+    forbiddenpat.AlignWith(params.state);
+    approach.approachOn = forbiddenpat.state & forbiddenpat.marked;
+    approach.approachOff = ~forbiddenpat.state & forbiddenpat.marked;
+    approach.RecalculateSignature();
+    result.forbidden.push_back(approach);
+  }
 
   unsigned contactCount = result.approach.approachOn.CountNeighbours({0, 0});
   result.contactType =
@@ -214,6 +225,11 @@ CatalystData CatalystData::FromParamsTransparent(CatalystParams &params) {
 }
 
 CatalystData CatalystData::Transformed(SymmetryTransform t) {
+  std::vector<Approach> newForbiddens;
+  for (auto &oldForbidden : forbidden) {
+    newForbiddens.push_back(oldForbidden.Transformed(t));
+  }
+
   CatalystData result = {
     state.Transformed(t),
     halo.Transformed(t),
@@ -228,7 +244,8 @@ CatalystData CatalystData::Transformed(SymmetryTransform t) {
     contactType,
     maxRecoveryTime,
     minRecoveryTime,
-    transparent
+    transparent,
+    newForbiddens
   };
 
   return result;
@@ -695,6 +712,14 @@ PlacementValidity TestPlacement(const SearchData &data, SearchNode &search,
   immediatebirths &= (catalyst.required & ~catalyst.state);
   if (!immediatebirths.IsEmpty())
     return PlacementValidity::FAILED_ELSEWHERE;
+
+  // Check the forbidden approaches
+  for (auto &f : catalyst.forbidden) {
+    LifeState differences = (f.approachOn & ~centered) |
+                            (f.approachOff & centered);
+    if (differences.IsEmpty())
+      return PlacementValidity::FAILED_ELSEWHERE;
+  }
 
   return PlacementValidity::VALID;
 }
