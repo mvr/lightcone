@@ -7,8 +7,8 @@
 
 #include "LifeAPI/LifeAPI.hpp"
 
-const unsigned bloomHashes = 12;
-const unsigned bloomSize = 8 * 1024 * 1024 * 16; // 16MiB
+const unsigned bloomHashes = 15;
+const unsigned bloomSize = 8 * 1024 * 1024 * 128; // 128MiB
 const uint64_t bloomSeed = 19;
 
 struct LifeBloom {
