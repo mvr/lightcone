@@ -936,15 +936,23 @@ void MakePlacement(const SearchParams &params, const SearchData &data,
 
 void ResetLightcone(const SearchParams &params, const SearchData &data,
                     SearchNode &search, const Placement &placement) {
+
+  if(debug) std::cout << "Resetting lightcone" << std::endl;
+
   LifeState current = search.lookahead.state;
-  LifeState history = search.lookahead.state;
 
-  for (unsigned gen = search.lookahead.gen; gen < placement.gen; gen++) {
+  LifeState safeContacts1, safeContacts2, safeContactsM;
+
+  // +1, because the first perturbation happens the generation after the placement
+  for (unsigned gen = search.lookahead.gen; gen < placement.gen + 1; gen++) {
+    LifeState currentCount1(UNINITIALIZED), currentCount2(UNINITIALIZED), currentCountM(UNINITIALIZED);
+    current.InteractionCounts(currentCount1, currentCount2, currentCountM);
+    safeContacts1 |= currentCount1;
+    safeContacts2 |= currentCount2;
+    safeContactsM |= currentCountM;
+
     current.Step();
-    history |= current;
   }
-
-  LifeState safeContacts = history.ZOI();
 
   LifeState tooClose = LifeState::NZOIAround(placement.pos, approachRadius);
 
@@ -952,8 +960,16 @@ void ResetLightcone(const SearchParams &params, const SearchData &data,
   // TODO: this is a lot of generations, is there a sensible time to stop
   // sooner?
   for (int i = 2 * approachRadius + 1; i < 32; i += 2) {
-    safeContacts |= current.ZOI() & ~tooClose;
+    LifeState currentCount1(UNINITIALIZED), currentCount2(UNINITIALIZED), currentCountM(UNINITIALIZED);
+    current.InteractionCounts(currentCount1, currentCount2, currentCountM);
+    safeContacts1 |= currentCount1 & ~tooClose;
+    safeContacts2 |= currentCount2 & ~tooClose;
+    safeContactsM |= currentCountM & ~tooClose;
+
+    if(debug) std::cout << LifeHistoryState(current, LifeState(), tooClose) << std::endl;;
+
     current.Step();
+
     // Is it faster to just recompute the `NZOIAround`?
     tooClose = tooClose.ZOI();
   }
@@ -961,8 +977,23 @@ void ResetLightcone(const SearchParams &params, const SearchData &data,
   // Now invalidate every placement that isn't safe
   // (Doesn't reset the `tried` field)
   for (unsigned i = 0; i < data.catalysts.size(); i++) {
-    search.constraints[i].knownPlaceable &= safeContacts;
-    search.constraints[i].knownUnplaceable &= safeContacts;
+    switch (data.catalysts[i].contactType) {
+    case ContactType::CONTACT1:
+      search.constraints[i].knownPlaceable &= safeContacts1;
+      search.constraints[i].knownUnplaceable &= safeContacts1;
+      break;
+    case ContactType::CONTACT2:
+      search.constraints[i].knownPlaceable &= safeContacts2;
+      search.constraints[i].knownUnplaceable &= safeContacts2;
+      break;
+    case ContactType::CONTACTM:
+      search.constraints[i].knownPlaceable &= safeContactsM;
+      search.constraints[i].knownUnplaceable &= safeContactsM;
+      break;
+    case ContactType::TRANSPARENT:
+      // They are always placeable
+      break;
+    }
   }
 }
 
