@@ -515,9 +515,9 @@ LifeState Problem::LightCone(unsigned currentgen) {
   case ProblemType::WINNER:
   case ProblemType::NO_REACTION:
   case ProblemType::TOO_LONG:
+  case ProblemType::BLOOM_SEEN:
     return ~LifeState();
   case ProblemType::NONE:
-  case ProblemType::BLOOM_SEEN:
     __builtin_unreachable();
   }
 }
