@@ -13,7 +13,7 @@ const unsigned print_progress_frequency = 100000;
 
 const unsigned approachRadius = 1; // Needs to match catalyst input
 // const unsigned perturbationLookahead = 5; // TODO
-const unsigned bloomThreshold = 12; // Min population
+const unsigned bloomPopulationThreshold = 12; // Min population
 
 const unsigned maxStationaryGens = 32 - 1;
 
@@ -386,9 +386,7 @@ struct Lookahead {
   Problem Problem(const SearchParams &params, const SearchData &data,
                   const Configuration &config) const;
 
-  bool Bloomable(const Configuration &config) const;
-
-  LifeState BloomKey(const Configuration &config) const;
+  std::pair<LifeState, bool> BloomKey(const Configuration &config) const;
 };
 
 void Lookahead::Step(const Configuration &config) {
@@ -485,9 +483,9 @@ Problem Lookahead::Problem(const SearchParams &params, const SearchData &data,
     }
   }
 
-  if (params.useBloomFilter && Bloomable(config)) {
-    LifeState key = BloomKey(config);
-    if (key.GetPop() > bloomThreshold) {
+  if (params.useBloomFilter) {
+    auto [key, valid] = BloomKey(config);
+    if(valid) {
       bool seen = data.bloom->Lookup(key);
       if (seen)
         return {{-1, -1}, gen, ProblemType::BLOOM_SEEN};
@@ -497,13 +495,11 @@ Problem Lookahead::Problem(const SearchParams &params, const SearchData &data,
   return {{-1, -1}, gen, ProblemType::NONE};
 }
 
-bool Lookahead::Bloomable(const Configuration &config) const {
-  return gen > config.lastInteraction + 2;
-}
+std::pair<LifeState, bool> Lookahead::BloomKey(const Configuration &config) const {
+  LifeState toHash = state & ~config.catalysts;
+  bool valid = (gen > config.lastInteraction + 2) && (toHash.GetPop() > bloomPopulationThreshold);
 
-// TODO: this doesn't work well for catalysts with long internal recoveries
-LifeState Lookahead::BloomKey(const Configuration &config) const {
-  return state & ~config.catalysts;
+  return {toHash, valid};
 }
 
 // Contact points that are close enough to the current problem to
@@ -604,19 +600,19 @@ Problem TryAdvance(const SearchParams &params, const SearchData &data,
     if (!needAdvance)
       break;
 
+
+    // TODO: reduce duplication
+    if (params.useBloomFilter) {
+      auto [key, valid] = search.lookahead.BloomKey(config);
+      if(valid)
+        data.bloom->Insert(key);
+    }
     search.lookahead.Step(search.config);
     search.history1 |= currentCount1;
     search.history2 |= currentCount2;
     search.historyM |= currentCountM;
 
     if constexpr (debug) std::cout << "Advanced to " << search.lookahead.state << std::endl;
-
-    // TODO: reduce duplication
-    if (params.useBloomFilter && search.lookahead.Bloomable(search.config)) {
-      LifeState key = search.lookahead.BloomKey(search.config);
-      if (key.GetPop() > bloomThreshold)
-        data.bloom->Insert(key);
-    }
   }
 
   // We can't advance the state any more, but we still need to find the future
@@ -634,9 +630,10 @@ Problem TryAdvance(const SearchParams &params, const SearchData &data,
       return problem;
 
     // TODO: reduce duplication
-    if (params.useBloomFilter && lookahead.Bloomable(search.config)) {
-      LifeState key = lookahead.BloomKey(search.config);
-      if (key.GetPop() > bloomThreshold)
+    if (params.useBloomFilter) {
+      auto [key, valid] = lookahead.BloomKey(config);
+
+      if(valid)
         data.bloom->Insert(key);
     }
   }
@@ -727,6 +724,7 @@ PlacementValidity TestPlacement(const SearchData &data, SearchNode &search,
   return PlacementValidity::VALID;
 }
 
+// This function is now too spaghetti
 std::vector<Placement> CollectPlacements(const SearchParams &params,
                                          const SearchData &data,
                                          SearchNode &search, Problem &problem) {
@@ -750,8 +748,12 @@ std::vector<Placement> CollectPlacements(const SearchParams &params,
     somePlaceable |= ~(search.constraints[i].tried | search.constraints[i].knownUnplaceable);
   }
 
+  bool advanceable = true;
+
   for (unsigned gen = search.lookahead.gen; gen < problem.gen; gen++) {
     if constexpr (debug) std::cout << "Gen " << gen << " state: " << current << std::endl;
+
+    bool hasPlacement = false;
 
     LifeState currentCount1(UNINITIALIZED), currentCount2(UNINITIALIZED),
         currentCountM(UNINITIALIZED);
@@ -760,11 +762,15 @@ std::vector<Placement> CollectPlacements(const SearchParams &params,
     LifeState newContactPoints = (currentCount1 & ~currentHistory1) |
                                  (currentCount2 & ~currentHistory2) |
                                  (currentCountM & ~currentHistoryM);
+    LifeState lightcone = problem.LightCone(gen);
 
-    newContactPoints &= problem.LightCone(gen) & somePlaceable;
+    if(!advanceable)
+      newContactPoints &= somePlaceable & lightcone;
 
     for (auto cell = newContactPoints.FirstOn(); cell != std::make_pair(-1, -1);
          newContactPoints.Erase(cell), cell = newContactPoints.FirstOn()) {
+
+      bool inLightcone = lightcone.Get(cell);
 
       ContactType contactType =
           currentCount1.Get(cell)
@@ -778,26 +784,44 @@ std::vector<Placement> CollectPlacements(const SearchParams &params,
       for (unsigned i = 0; i < data.catalysts.size(); i++) {
         const CatalystData &catalyst = data.catalysts[i];
 
-        if (catalyst.contactType != contactType)
-          continue;
+        // Fast checks
+        if(!advanceable){
+          if (catalyst.contactType != contactType)
+            continue;
 
-        if (!catalyst.approach.MatchesSignature(signature)) {
-          search.constraints[i].knownUnplaceable.Set(cell);
-          continue;
-        }
+          if (!catalyst.approach.MatchesSignature(signature)) {
+            search.constraints[i].knownUnplaceable.Set(cell);
+            continue;
+          }
 
-        if (search.constraints[i].tried.Get(cell) ||
-            search.constraints[i].knownUnplaceable.Get(cell)) {
-          continue;
+          if (search.constraints[i].tried.Get(cell) ||
+              search.constraints[i].knownUnplaceable.Get(cell)) {
+            continue;
+          }
         }
 
         Placement p = {cell, i, gen};
 
         if (catalyst.contactType == contactType &&
             search.constraints[i].knownPlaceable.Get(cell)) {
-          result.push_back(p);
+          if(inLightcone)
+            result.push_back(p);
+          hasPlacement = true;
           continue;
         }
+
+        if (catalyst.contactType != contactType &&
+            search.constraints[i].knownPlaceable.Get(cell)) {
+          continue;
+        }
+
+        if (advanceable && search.constraints[i].knownUnplaceable.Get(cell)) {
+          search.constraints[i].tried.Set(cell);
+          continue;
+        }
+
+        if (search.constraints[i].tried.Get(cell))
+          continue;
 
         PlacementValidity validity = TestPlacement(
             data, search, current, p, contactType, signature, currentHistory1,
@@ -806,13 +830,19 @@ std::vector<Placement> CollectPlacements(const SearchParams &params,
         switch (validity) {
         case PlacementValidity::VALID:
           search.constraints[i].knownPlaceable.Set(cell);
-          result.push_back(p);
+          if(inLightcone)
+            result.push_back(p);
+          hasPlacement = true;
           break;
         case PlacementValidity::FAILED_CONTACT:
           search.constraints[i].knownUnplaceable.Set(cell);
+          if (advanceable)
+            search.constraints[i].tried.Set(cell);
           break;
         case PlacementValidity::FAILED_ELSEWHERE:
         case PlacementValidity::INVALID_CONTACT:
+          if (advanceable)
+            search.constraints[i].tried.Set(cell);
           break;
         }
       }
@@ -835,7 +865,9 @@ std::vector<Placement> CollectPlacements(const SearchParams &params,
                cell != std::make_pair(-1, -1); newContactPoints.Erase(cell),
                     cell = newContactPoints.FirstOn()) {
             Placement p = {cell, i, gen};
-            result.push_back(p);
+            if(inLightcone)
+              result.push_back(p);
+            hasPlacement = true;
           }
         }
       }
@@ -845,7 +877,26 @@ std::vector<Placement> CollectPlacements(const SearchParams &params,
     currentHistory2 |= currentCount2;
     currentHistoryM |= currentCountM;
 
-    current.Step();
+    if (advanceable && !hasPlacement) {
+      // TODO: reduce duplication
+      if (params.useBloomFilter) {
+        auto [key, valid] = search.lookahead.BloomKey(search.config);
+        if(valid)
+          data.bloom->Insert(key);
+      }
+
+      search.lookahead.Step(search.config);
+      current = search.lookahead.state;
+      search.history1 |= currentCount1;
+      search.history2 |= currentCount2;
+      search.historyM |= currentCountM;
+
+      if constexpr (debug) std::cout << "Advanced to " << search.lookahead.state << std::endl;
+    } else {
+      current.Step();
+    }
+
+    advanceable = advanceable && !hasPlacement;
   }
 
   return result;
