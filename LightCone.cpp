@@ -283,6 +283,9 @@ LifeState CatalystData::CollisionMask(const CatalystData &b) const {
   // Block active interacting with required
   result |= (state.ZOI() & ~required).Convolve(b.required.Mirrored());
 
+  // And vice versa
+  result |= (b.state.ZOI() & ~b.required).Mirrored().Convolve(required);
+
   return result;
 }
 
