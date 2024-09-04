@@ -904,28 +904,28 @@ std::vector<Placement> CollectPlacements(const SearchParams &params,
 
 void MakePlacement(const SearchParams &params, const SearchData &data,
                    SearchNode &search, const Placement &placement) {
-  const CatalystData &catalystdata = data.catalysts[placement.catalystIx];
+  const CatalystData &catalyst = data.catalysts[placement.catalystIx];
 
-  const LifeState catalyst = catalystdata.state.Moved(placement.pos);
+  const LifeState catalystState = catalyst.state.Moved(placement.pos);
 
   search.config.numCatalysts++;
-  if(catalystdata.transparent) search.config.numTransparent++;
+  if(catalyst.transparent) search.config.numTransparent++;
   search.config.lastInteraction = std::max(search.config.lastInteraction, placement.gen);
-  search.config.state |= catalyst;
-  search.config.catalysts |= catalyst;
-  search.config.required |= catalystdata.required.Moved(placement.pos);
+  search.config.state |= catalystState;
+  search.config.catalysts |= catalystState;
+  search.config.required |= catalyst.required.Moved(placement.pos);
   search.config.placements.push_back(placement);
   search.config.targets.push_back(
-      LifeTarget(catalystdata.state.Moved(placement.pos),
-                 catalystdata.halo.Moved(placement.pos)));
+      LifeTarget(catalyst.state.Moved(placement.pos),
+                 catalyst.halo.Moved(placement.pos)));
 
-  search.lookahead.state |= catalyst;
+  search.lookahead.state |= catalystState;
   search.lookahead.missingTime.push_back(0);
   search.lookahead.catalystHasInteracted.push_back(false);
 
-  search.history1 |= catalystdata.history1.Moved(placement.pos);
-  search.history2 |= catalystdata.history2.Moved(placement.pos);
-  search.historyM |= catalystdata.historyM.Moved(placement.pos);
+  search.history1 |= catalyst.history1.Moved(placement.pos);
+  search.history2 |= catalyst.history2.Moved(placement.pos);
+  search.historyM |= catalyst.historyM.Moved(placement.pos);
 
   for (unsigned t = 0; t < data.catalysts.size(); t++) {
     search.constraints[t].tried |=
