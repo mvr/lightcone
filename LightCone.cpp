@@ -849,16 +849,27 @@ std::vector<Placement> CollectPlacements(const SearchParams &params,
 
       // Handle transparent catalysts
       if (search.config.numTransparent < params.maxTransparent) {
-        LifeState newHistory1 = currentHistory1 & newContactPoints;
-        LifeState newHistory2 = currentHistory2 & newContactPoints;
         for (unsigned i = 0; i < data.catalysts.size(); i++) {
           const CatalystData &catalyst = data.catalysts[i];
           if (catalyst.contactType != ContactType::TRANSPARENT)
             continue;
 
-          LifeState newContactPoints =
-              catalyst.historyFlipped1.Convolve(newHistory2) |
-              catalyst.historyFlipped2.Convolve(newHistory1);
+          LifeState newContactPoints(UNINITIALIZED);
+
+          switch (contactType /* of the active region */) {
+          case ContactType::CONTACT1:
+            newContactPoints = catalyst.historyFlipped2.Moved(cell);
+            break;
+          case ContactType::CONTACT2:
+            newContactPoints = catalyst.historyFlipped1.Moved(cell);
+            break;
+          case ContactType::CONTACTM:
+            newContactPoints = (catalyst.historyFlipped1 | catalyst.historyFlipped2).Moved(cell);
+            break;
+          case ContactType::TRANSPARENT:
+            break;
+          }
+
           newContactPoints &= ~search.constraints[i].tried;
 
           for (auto cell = newContactPoints.FirstOn();
