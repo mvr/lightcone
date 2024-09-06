@@ -316,10 +316,11 @@ struct Configuration {
 
   std::vector<Placement> placements;
   std::vector<LifeTarget> targets; // Pre-shifted catalysts
+  std::vector<bool> transparent;
 
   Configuration()
       : state{}, catalysts{}, required{}, numCatalysts{0}, numTransparent{0},
-        lastInteraction{0}, placements{}, targets{} {}
+        lastInteraction{0}, placements{}, targets{}, transparent{} {}
 };
 
 enum struct ProblemType {
@@ -377,6 +378,8 @@ struct Lookahead {
   std::vector<bool> catalystHasInteracted;
   unsigned startTime;
   unsigned recoveredTime;
+  bool allPresent;
+  bool nonTransparentPresent;
 
   Lookahead()
       : state{}, everActive{}, gen{0}, hasInteracted{false}, missingTime{},
@@ -401,7 +404,8 @@ void Lookahead::Step(const Configuration &config) {
 
   // Why is there no easy way to iterate with index? My kingdom for a `zip`
   unsigned i = 0;
-  bool allPresent = true;
+  allPresent = true;
+  nonTransparentPresent = true;
   for (auto &t : config.targets) {
     if (state.Contains(t)) {
       missingTime[i] = 0;
@@ -413,11 +417,20 @@ void Lookahead::Step(const Configuration &config) {
         hasInteracted = true;
       }
       allPresent = false;
+      if(config.transparent[i])
+        nonTransparentPresent = false;
     }
     i++;
   }
 
   recoveredTime = allPresent ? (recoveredTime + 1) : 0;
+}
+
+std::pair<LifeState, bool> Lookahead::BloomKey(const Configuration &config) const {
+  LifeState toHash = state & ~config.catalysts;
+  bool valid = nonTransparentPresent && (gen > config.lastInteraction + 2) && (toHash.GetPop() > bloomPopulationThreshold);
+
+  return {toHash, valid};
 }
 
 Problem Lookahead::Problem(const SearchParams &params, const SearchData &data,
@@ -493,13 +506,6 @@ Problem Lookahead::Problem(const SearchParams &params, const SearchData &data,
   }
 
   return {{-1, -1}, gen, ProblemType::NONE};
-}
-
-std::pair<LifeState, bool> Lookahead::BloomKey(const Configuration &config) const {
-  LifeState toHash = state & ~config.catalysts;
-  bool valid = (gen > config.lastInteraction + 2) && (toHash.GetPop() > bloomPopulationThreshold);
-
-  return {toHash, valid};
 }
 
 // Contact points that are close enough to the current problem to
@@ -889,13 +895,6 @@ std::vector<Placement> CollectPlacements(const SearchParams &params,
     currentHistoryM |= currentCountM;
 
     if (advanceable && !hasPlacement) {
-      // TODO: reduce duplication
-      if (params.useBloomFilter) {
-        auto [key, valid] = search.lookahead.BloomKey(search.config);
-        if(valid)
-          data.bloom->Insert(key);
-      }
-
       search.lookahead.Step(search.config);
       current = search.lookahead.state;
       search.history1 |= currentCount1;
@@ -929,6 +928,7 @@ void MakePlacement(const SearchParams &params, const SearchData &data,
   search.config.targets.push_back(
       LifeTarget(catalyst.state.Moved(placement.pos),
                  catalyst.halo.Moved(placement.pos)));
+  search.config.transparent.push_back(catalyst.transparent);
 
   search.lookahead.state |= catalystState;
   search.lookahead.missingTime.push_back(0);
