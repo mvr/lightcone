@@ -210,6 +210,15 @@ CatalystData CatalystData::FromParamsTransparent(CatalystParams &params) {
   result.approach.signature = 0;
   result.approach.signatureMask = 0;
 
+  for (auto &forbiddenpat : params.forbiddens) {
+    Approach approach;
+    forbiddenpat.AlignWith(params.state);
+    approach.approachOn = forbiddenpat.state & forbiddenpat.marked;
+    approach.approachOff = ~forbiddenpat.state & forbiddenpat.marked;
+    approach.RecalculateSignature();
+    result.forbidden.push_back(approach);
+  }
+
   result.contactType = ContactType::TRANSPARENT;
 
   result.minRecoveryTime = params.minRecoveryTime;
@@ -578,23 +587,29 @@ Problem TryAdvance(const SearchParams &params, const SearchData &data,
       // See whether any catalysts have placements left at all
       for (unsigned i = 0; i < data.catalysts.size(); i++) {
         const CatalystData &catalyst = data.catalysts[i];
-        LifeState remainingPlacements =
-            newContactPoints & ~(search.constraints[i].knownUnplaceable |
-                                 search.constraints[i].tried);
+
+        LifeState remainingPlacements(UNINITIALIZED);
 
         switch (catalyst.contactType) {
         case ContactType::CONTACT1:
-          remainingPlacements &= currentCount1;
+          remainingPlacements = newContactPoints & currentCount1;
           break;
         case ContactType::CONTACT2:
-          remainingPlacements &= currentCount2;
+          remainingPlacements = newContactPoints & currentCount2;
           break;
         case ContactType::CONTACTM:
-          remainingPlacements &= currentCountM;
+          remainingPlacements = newContactPoints & currentCountM;
           break;
         case ContactType::TRANSPARENT:
+          remainingPlacements = (newContactPoints & currentCount1)
+                                    .Convolve(catalyst.historyFlipped2) |
+                                (newContactPoints & currentCount2)
+                                    .Convolve(catalyst.historyFlipped1);
           break;
         }
+
+        remainingPlacements &= ~(search.constraints[i].knownUnplaceable |
+                                 search.constraints[i].tried);
 
         if (!remainingPlacements.IsEmpty()) {
           needAdvance = false;
@@ -876,12 +891,31 @@ std::vector<Placement> CollectPlacements(const SearchParams &params,
             break;
           }
 
-          newContactPoints &= ~search.constraints[i].tried;
+          newContactPoints &= ~(search.constraints[i].tried | search.constraints[i].knownUnplaceable);
 
           for (auto cell = newContactPoints.FirstOn();
                cell != std::make_pair(-1, -1); newContactPoints.Erase(cell),
                     cell = newContactPoints.FirstOn()) {
             Placement p = {cell, i, gen};
+
+            LifeState centered = current.Moved(-p.pos.first, -p.pos.second);
+            bool isForbidden = false;
+            for (auto &f : catalyst.forbidden) {
+              LifeState differences = (f.approachOn & ~centered) |
+                                      (f.approachOff & centered);
+              if (differences.IsEmpty()) {
+                isForbidden = true;
+                break;
+              }
+            }
+
+            if (isForbidden) {
+              search.constraints[i].knownUnplaceable.Set(cell);
+              if (advanceable)
+                search.constraints[i].tried.Set(cell);
+              continue;
+            }
+
             if(inLightcone)
               result.push_back(p);
             hasPlacement = true;
