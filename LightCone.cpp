@@ -12,7 +12,6 @@ const bool print_progress = true;
 const unsigned print_progress_frequency = 100000;
 
 const unsigned approachRadius = 1; // Needs to match catalyst input
-// const unsigned perturbationLookahead = 5; // TODO
 const unsigned bloomPopulationThreshold = 12; // Min population
 
 const unsigned maxStationaryGens = 32 - 1;
@@ -540,9 +539,9 @@ LifeState Problem::LightCone(unsigned currentgen) {
 // mvrnote: name?
 // Arranged so 0 -> 1 is increasing information
 struct CatalystConstraints {
-  LifeState tried;
-  LifeState knownPlaceable;
-  LifeState knownUnplaceable;
+  LifeState tried;            // Permanently ruled out
+  LifeState knownUnplaceable; // Can be rescued by earlier placement
+  LifeState knownPlaceable;   // Can be invalidated by earlier placement
 };
 
 struct SearchNode {
@@ -628,6 +627,7 @@ Problem TryAdvance(const SearchParams &params, const SearchData &data,
       if(valid)
         data.bloom->Insert(key);
     }
+
     search.lookahead.Step(search.config);
     search.history1 |= currentCount1;
     search.history2 |= currentCount2;
@@ -888,6 +888,7 @@ std::vector<Placement> CollectPlacements(const SearchParams &params,
             newContactPoints = (catalyst.historyFlipped1 | catalyst.historyFlipped2).Moved(cell);
             break;
           case ContactType::TRANSPARENT:
+            // Not reachable
             break;
           }
 
