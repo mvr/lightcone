@@ -541,7 +541,6 @@ LifeState Problem::LightCone(unsigned currentgen) {
 struct CatalystConstraints {
   LifeState tried;            // Permanently ruled out
   LifeState knownUnplaceable; // Can be rescued by earlier placement
-  LifeState knownPlaceable;   // Can be invalidated by earlier placement
 };
 
 struct SearchNode {
@@ -823,19 +822,6 @@ std::vector<Placement> CollectPlacements(const SearchParams &params,
 
         Placement p = {cell, i, gen};
 
-        if (catalyst.contactType == contactType &&
-            search.constraints[i].knownPlaceable.Get(cell)) {
-          if(inLightcone)
-            result.push_back(p);
-          hasPlacement = true;
-          continue;
-        }
-
-        if (catalyst.contactType != contactType &&
-            search.constraints[i].knownPlaceable.Get(cell)) {
-          continue;
-        }
-
         if (advanceable && search.constraints[i].knownUnplaceable.Get(cell)) {
           search.constraints[i].tried.Set(cell);
           continue;
@@ -850,7 +836,6 @@ std::vector<Placement> CollectPlacements(const SearchParams &params,
 
         switch (validity) {
         case PlacementValidity::VALID:
-          search.constraints[i].knownPlaceable.Set(cell);
           if(inLightcone)
             result.push_back(p);
           hasPlacement = true;
@@ -1025,15 +1010,12 @@ void ResetLightcone(const SearchParams &params, const SearchData &data,
   for (unsigned i = 0; i < data.catalysts.size(); i++) {
     switch (data.catalysts[i].contactType) {
     case ContactType::CONTACT1:
-      search.constraints[i].knownPlaceable &= safeContacts1;
       search.constraints[i].knownUnplaceable &= safeContacts1;
       break;
     case ContactType::CONTACT2:
-      search.constraints[i].knownPlaceable &= safeContacts2;
       search.constraints[i].knownUnplaceable &= safeContacts2;
       break;
     case ContactType::CONTACTM:
-      search.constraints[i].knownPlaceable &= safeContactsM;
       search.constraints[i].knownUnplaceable &= safeContactsM;
       break;
     case ContactType::TRANSPARENT:
