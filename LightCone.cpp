@@ -9,12 +9,12 @@
 
 const bool debug = false;
 const bool print_progress = true;
-const unsigned print_progress_frequency = 100000;
+const unsigned print_progress_frequency = 1000000;
 
-const unsigned approachRadius = 1; // Needs to match catalyst input
+const unsigned approachRadius = 2; // Needs to match catalyst input
 const unsigned bloomPopulationThreshold = 12; // Min population
 
-const unsigned maxStationaryGens = 32 - 1;
+const unsigned maxStationaryGens = 64 - 1;
 
 enum struct ContactType {
   CONTACT1,
