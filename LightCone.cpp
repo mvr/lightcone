@@ -561,6 +561,30 @@ struct SearchNode {
   void Step(const SearchParams &params, const SearchData &data);
 };
 
+Problem DetermineProblem(const SearchParams &params, const SearchData &data,
+                         const Configuration &config, SearchNode &search) {
+  Lookahead lookahead = search.lookahead;
+
+  while (true) {
+    lookahead.Step(config);
+
+    if constexpr (debug) std::cout << "Lookahead to " << lookahead.state << std::endl;
+
+    Problem problem = lookahead.Problem(params, data, config);
+
+    if (problem.type != ProblemType::NONE)
+      return problem;
+
+    // TODO: reduce duplication
+    if (params.useBloomFilter) {
+      auto [key, valid] = lookahead.BloomKey(config);
+
+      if(valid)
+        data.bloom->Insert(key);
+    }
+  }
+}
+
 Problem TryAdvance(const SearchParams &params, const SearchData &data,
                    const Configuration &config, SearchNode &search) {
   if constexpr (debug) std::cout << "Trying to advance: " << search.lookahead.state << std::endl;
@@ -1030,7 +1054,7 @@ void RunSearch(const SearchParams &params, const SearchData &data,
 
   if constexpr (debug) std::cout << "Starting node: " << search.config.state << std::endl;
 
-  Problem problem = TryAdvance(params, data, search.config, search);
+  Problem problem = DetermineProblem(params, data, search.config, search);
 
   if constexpr (print_progress) {
     static unsigned counter = 0;
