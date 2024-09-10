@@ -871,9 +871,10 @@ std::vector<Placement> CollectPlacements(const SearchParams &params,
             search.constraints[i].tried.Set(cell);
           break;
         case PlacementValidity::FAILED_ELSEWHERE:
-        case PlacementValidity::INVALID_CONTACT:
           if (advanceable)
             search.constraints[i].tried.Set(cell);
+          break;
+        case PlacementValidity::INVALID_CONTACT:
           break;
         }
       }
