@@ -12,6 +12,7 @@ const bool print_progress = true;
 const unsigned print_progress_frequency = 1000000;
 
 const unsigned approachRadius = 2; // Needs to match catalyst input
+const unsigned lightconeResetRadius = 0;
 const unsigned bloomPopulationThreshold = 12; // Min population
 
 const unsigned maxStationaryGens = 64 - 1;
@@ -1014,7 +1015,7 @@ void ResetLightcone(const SearchParams &params, const SearchData &data,
   // Until the universe is covered
   // TODO: this is a lot of generations, is there a sensible time to stop
   // sooner?
-  for (int i = 2 * approachRadius + 1; i < 32; i += 2) {
+  for (int i = 2 * approachRadius + 1; i < lightconeResetRadius * 2; i += 2) {
     LifeState currentCount1(UNINITIALIZED), currentCount2(UNINITIALIZED), currentCountM(UNINITIALIZED);
     current.InteractionCounts(currentCount1, currentCount2, currentCountM);
     safeContacts1 |= currentCount1 & ~tooClose;
