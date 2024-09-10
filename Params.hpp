@@ -119,7 +119,7 @@ SearchParams SearchParams::FromToml(toml::value &toml) {
   std::string rle = toml::find<std::string>(toml, "pattern");
   params.state = LifeHistoryState::Parse(rle);
 
-  params.maxCatalysts = toml::find_or(toml, "max-catalysts", 3);
+  params.maxCatalysts = toml::find_or(toml, "max-catalysts", 100);
   params.maxTransparent = toml::find_or(toml, "max-transparent", 0);
   params.minStableTime = toml::find_or(toml, "min-stable-time", 8);
 
