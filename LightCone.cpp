@@ -426,7 +426,7 @@ void Lookahead::Step(const Configuration &config) {
         hasInteracted = true;
       }
       allPresent = false;
-      if(config.transparent[i])
+      if(!config.transparent[i])
         nonTransparentPresent = false;
     }
     i++;
