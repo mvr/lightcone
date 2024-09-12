@@ -13,6 +13,7 @@ const unsigned print_progress_frequency = 1000000;
 
 const unsigned approachRadius = 2; // Needs to match catalyst input
 const unsigned lightconeResetRadius = 0;
+const unsigned placementRequiredLookahead = 0;
 const unsigned bloomPopulationThreshold = 12; // Min population
 
 const unsigned maxStationaryGens = 64 - 1;
@@ -763,6 +764,13 @@ PlacementValidity TestPlacement(const SearchData &data, SearchNode &search,
     LifeState differences = (f.approachOn & ~centered) |
                             (f.approachOff & centered);
     if (differences.IsEmpty())
+      return PlacementValidity::FAILED_ELSEWHERE;
+  }
+
+  if constexpr (placementRequiredLookahead > 0) {
+    LifeState lookahead = centered | catalyst.state;
+    lookahead.Step(placementRequiredLookahead);
+    if(!(catalyst.required & (lookahead ^ catalyst.state)).IsEmpty())
       return PlacementValidity::FAILED_ELSEWHERE;
   }
 
