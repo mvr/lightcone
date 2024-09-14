@@ -1060,11 +1060,8 @@ void ResetLightcone(const SearchParams &params, const SearchData &data,
 }
 
 void RunSearch(const SearchParams &params, const SearchData &data,
-               SearchNode &search) {
-
+               SearchNode &search, Problem problem) {
   if constexpr (debug) std::cout << "Starting node: " << search.config.state << std::endl;
-
-  Problem problem = DetermineProblem(params, data, search.config, search);
 
   if constexpr (print_progress) {
     static unsigned counter = 0;
@@ -1074,20 +1071,20 @@ void RunSearch(const SearchParams &params, const SearchData &data,
       LifeState problemGen = search.lookahead.state;
       problemGen.Step(problem.gen - search.lookahead.gen);
       std::cout << "Current problem: " << problem << std::endl;
-      if(problem.cell.first != -1)
-        std::cout << LifeHistoryState(problemGen, LifeState(), LifeState::Cell(problem.cell)) << std::endl;
+      // if(problem.cell.first != -1)
+      //   std::cout << LifeHistoryState(problemGen, LifeState(), LifeState::Cell(problem.cell)) << std::endl;
       if(params.useBloomFilter) {
         std::cout << "Bloom filter population: " << data.bloom->items << std::endl;
         std::cout << "Bloom filter error rate: " << data.bloom->ApproximateErrorRate() << std::endl;
       }
-      std::cout << "Current placements:" << std::endl;
-      LifeState progression = params.state.state;
-      for (auto &p : search.config.placements) {
-        const CatalystData &catalystdata = data.catalysts[p.catalystIx];
-        const LifeState catalyst = catalystdata.state.Moved(p.pos);
-        progression |= catalyst;
-        std::cout << progression << std::endl;
-      }
+      // std::cout << "Current placements:" << std::endl;
+      // LifeState progression = params.state.state;
+      // for (auto &p : search.config.placements) {
+      //   const CatalystData &catalystdata = data.catalysts[p.catalystIx];
+      //   const LifeState catalyst = catalystdata.state.Moved(p.pos);
+      //   progression |= catalyst;
+      //   std::cout << progression << std::endl;
+      // }
       counter = 0;
     }
   }
@@ -1101,9 +1098,6 @@ void RunSearch(const SearchParams &params, const SearchData &data,
     }
   }
 
-  if (problem.type == ProblemType::BLOOM_SEEN)
-    return;
-  
   if (problem.type == ProblemType::TOO_LONG) {
     std::cout << "Too long: " << search.config.state << std::endl;
   }
@@ -1125,8 +1119,13 @@ void RunSearch(const SearchParams &params, const SearchData &data,
   std::vector<Placement> placements =
       CollectPlacements(params, data, search, problem);
 
-  for (const auto &placement : placements) {
-    // TODO: there may be repeat placements due to transparent catalysts
+  std::vector<SearchNode> subsearches;
+  subsearches.reserve(placements.size());
+
+  std::vector<Problem> problems;
+  problems.reserve(placements.size());
+
+  for (auto &placement : placements) {
     if (search.constraints[placement.catalystIx].tried.Get(placement.pos))
       continue;
 
@@ -1144,12 +1143,14 @@ void RunSearch(const SearchParams &params, const SearchData &data,
       }
     }
 
-    if constexpr (debug)
-      std::cout << "Branching: " << placement.catalystIx << std::endl;
-
     ResetLightcone(params, data, newSearch, placement);
 
-    RunSearch(params, data, newSearch);
+    problems.push_back(DetermineProblem(params, data, newSearch.config, newSearch));
+    subsearches.push_back(newSearch);
+  }
+
+  for (unsigned i = 0; i < subsearches.size(); i++) {
+    RunSearch(params, data, subsearches[i], problems[i]);
   }
 }
 
@@ -1232,7 +1233,9 @@ int main(int, char *argv[]) {
 
   search.BlockEarlyInteractions(params, data);
 
-  RunSearch(params, data, search);
+  Problem problem = DetermineProblem(params, data, search.config, search);
+
+  RunSearch(params, data, search, problem);
   if (params.useBloomFilter) {
     std::cout << "Bloom filter population: " << data.bloom->items << std::endl;
     std::cout << "Bloom filter approx    : "
