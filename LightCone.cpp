@@ -438,7 +438,7 @@ void Lookahead::Step(const Configuration &config) {
 
 std::pair<LifeState, bool> Lookahead::BloomKey(const Configuration &config) const {
   LifeState toHash = state & ~config.catalysts;
-  bool valid = nonTransparentPresent && (gen > config.lastInteraction + 2) && (toHash.GetPop() > bloomPopulationThreshold);
+  bool valid = nonTransparentPresent && (gen > config.lastInteraction + 2) && (config.numCatalysts == 0 || !config.transparent[config.numCatalysts-1]) && (toHash.GetPop() > bloomPopulationThreshold);
 
   return {toHash, valid};
 }
