@@ -720,14 +720,14 @@ PlacementValidity TestPlacement(const SearchData &data, SearchNode &search,
   if (!catalyst.approach.MatchesSignature(signature))
     return PlacementValidity::FAILED_CONTACT;
 
+  constexpr LifeState originMask = LifeState::NZOIAround({0, 0}, approachRadius);
+
   LifeState centered = state.Moved(-p.pos.first, -p.pos.second);
 
   LifeState mismatches = (catalyst.approach.approachOn & ~centered) |
                          (catalyst.approach.approachOff & centered);
 
   if (!mismatches.IsEmpty()) {
-    constexpr LifeState originMask =
-        LifeState::NZOIAround({0, 0}, approachRadius);
     if ((originMask & mismatches).IsEmpty()) {
       return PlacementValidity::FAILED_ELSEWHERE;
     } else {
@@ -743,8 +743,6 @@ PlacementValidity TestPlacement(const SearchData &data, SearchNode &search,
       (catalyst.history1 & historyCount2.Moved(-p.pos.first, -p.pos.second)) |
       (catalyst.history2 & historyCount1.Moved(-p.pos.first, -p.pos.second));
   if (!pastinteractions.IsEmpty()) {
-    constexpr LifeState originMask =
-        LifeState::NZOIAround({0, 0}, approachRadius);
     if ((originMask & pastinteractions).IsEmpty()) {
       return PlacementValidity::FAILED_ELSEWHERE;
     } else {
