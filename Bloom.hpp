@@ -7,14 +7,16 @@
 
 #include "LifeAPI/LifeAPI.hpp"
 
-const unsigned bloomHashes = 15;
-const unsigned bloomSize = 8 * 1024 * 1024 * 128; // 128MiB
 const uint64_t bloomSeed = 19;
+// Via https://hur.st/bloomfilter/
+const unsigned long long bloomSize = 8ULL * 1024 * 1024 * 8; // 8MiB
+const unsigned bloomHashes = 33;
+const unsigned bloomClearThreshold = 1400000; // 1E-10 error rate
 
 struct LifeBloom {
-  uint64_t table[bloomSize / 64];
+  std::array<uint64_t, bloomSize / 64> table;
 
-  unsigned items;
+  unsigned long long items;
 
   LifeBloom() : table{0}, items{0} {}
   void Insert(const LifeState &state);
@@ -26,23 +28,27 @@ struct LifeBloom {
 };
 
 inline void LifeBloom::Insert(const LifeState &state) {
-  auto [baseHash1, baseHash2] =
-      XXH3_128bits_withSeed(state.state, 8 * N, bloomSeed);
-
-  for (unsigned i = 0; i < bloomHashes; i++) {
-    unsigned hash = (baseHash1 + i * baseHash2) % bloomSize;
-    table[hash / 64] |= 1ULL << (hash % 64);
+  if (items == bloomClearThreshold) [[unlikely]] {
+    table.fill(0ULL);
+    items = 0;
   }
 
+  auto [baseHash1, baseHash2] =
+      XXH3_128bits_withSeed(state.state, sizeof(uint64_t) * N, bloomSeed);
+
+  for (unsigned i = 0; i < bloomHashes; i++) {
+    unsigned long long hash = (baseHash1 + i * baseHash2) % bloomSize;
+    table[hash / 64] |= 1ULL << (hash % 64);
+  }
   items++;
 }
 
 inline bool LifeBloom::Lookup(const LifeState &state) const {
   auto [baseHash1, baseHash2] =
-      XXH3_128bits_withSeed(state.state, 8 * N, bloomSeed);
+      XXH3_128bits_withSeed(state.state, sizeof(uint64_t) * N, bloomSeed);
 
   for (unsigned i = 0; i < bloomHashes; i++) {
-    unsigned hash = (baseHash1 + i * baseHash2) % bloomSize;
+    unsigned long long hash = (baseHash1 + i * baseHash2) % bloomSize;
     bool bit = table[hash / 64] & (1ULL << (hash % 64));
     if (bit == 0)
       return false;
@@ -51,22 +57,30 @@ inline bool LifeBloom::Lookup(const LifeState &state) const {
 }
 
 inline bool LifeBloom::InsertAndLookup(const LifeState &state) {
+  if (items == bloomClearThreshold) [[unlikely]] {
+    table.fill(0ULL);
+    items = 0;
+  }
+
   auto [baseHash1, baseHash2] =
-      XXH3_128bits_withSeed(state.state, 8 * N, bloomSeed);
+      XXH3_128bits_withSeed(state.state, sizeof(uint64_t) * N, bloomSeed);
 
   bool seen = true;
   for (unsigned i = 0; i < bloomHashes; i++) {
-    unsigned hash = (baseHash1 + i * baseHash2) % bloomSize;
+    unsigned long long hash = (baseHash1 + i * baseHash2) % bloomSize;
     uint64_t bit = table[hash / 64] & (1ULL << (hash % 64));
     if (bit == 0)
       seen = false;
     table[hash / 64] |= 1ULL << (hash % 64);
   }
+  if (!seen)
+    items++;
+
   return seen;
 }
 
 inline unsigned LifeBloom::ApproximatePopulation() const {
-  unsigned setBits = 0;
+  unsigned long long setBits = 0;
   for (unsigned i = 0; i < bloomSize / 64; i++) {
     setBits += std::popcount(table[i]);
   }
