@@ -98,7 +98,8 @@ struct CatalystData {
   LifeState historyFlipped1;
   LifeState historyFlipped2;
   LifeState historyFlippedM;
-  Approach approach;
+  LifeState contact;
+  std::vector<Approach> approaches; // TODO: should probably be struct-of-vectors
   ContactType contactType; // At the origin contact cell
   unsigned maxRecoveryTime;
   unsigned minRecoveryTime;
@@ -116,32 +117,64 @@ struct CatalystData {
 };
 
 CatalystData CatalystData::FromParamsNormal(CatalystParams &params) {
-  LifeHistoryState &approach = params.approaches[0];
+  // LifeHistoryState &approach = params.approaches[0];
+  for (auto &approach : params.approaches) {
+    approach.AlignWith(params.state);
+  }
 
-  LifeState contact;
-  {
-    LifeState catalyst = approach.state & ~approach.marked;
-
+  LifeState commonContact = ~LifeState();
+  for(auto &approach : params.approaches) {
     LifeState reactionWithCatalyst = approach.state;
     reactionWithCatalyst.Step();
-    reactionWithCatalyst &= ~catalyst;
+    reactionWithCatalyst &= ~params.state;
 
     LifeState reactionWithoutCatalyst =
         approach.state & approach.marked;
     reactionWithoutCatalyst.Step();
 
-    contact = reactionWithCatalyst ^ reactionWithoutCatalyst;
+    LifeState contact = reactionWithCatalyst ^ reactionWithoutCatalyst;
+    commonContact &= contact;
   }
 
-  auto contactorigin = contact.FirstOn();
+  std::pair<int, int> contactOrigin;
+  unsigned contactCount;
+  LifeState tocheck = commonContact;
+  for (auto cell = tocheck.FirstOn(); cell != std::make_pair(-1, -1);
+       tocheck.Erase(cell), cell = tocheck.FirstOn()) {
+    unsigned count =
+        (params.approaches[0].state & ~params.state).CountNeighbours(cell);
+
+    bool allequal = std::all_of(
+        params.approaches.begin(), params.approaches.end(),
+        [&](const auto &approach) {
+          unsigned othercount =
+              (approach.state & ~params.state).CountNeighbours(cell);
+          return othercount == count;
+        });
+
+    if (allequal) {
+      contactOrigin = cell;
+      contactCount = count;
+      break;
+    }
+  }
+
+  params.state.Move(-contactOrigin.first, -contactOrigin.second);
+  commonContact.Move(-contactOrigin.first, -contactOrigin.second);
   // TODO: Calculate approach from the soups?
   // This tramples the contents of `params`, seems bad
-  approach.Move(-contactorigin.first, -contactorigin.second);
+  for (auto &approach : params.approaches) {
+    approach.Move(-contactOrigin.first, -contactOrigin.second);
+  }
 
-  params.state.AlignWith(approach.state & ~approach.marked);
   params.required.AlignWith(params.state);
 
   CatalystData result;
+
+  result.contactType =
+    contactCount == 1
+      ? ContactType::CONTACT1
+      : (contactCount == 2 ? ContactType::CONTACT2 : ContactType::CONTACTM);
 
   result.state = params.state;
   result.halo = params.state.ZOI() & ~params.state;
@@ -151,11 +184,19 @@ CatalystData CatalystData::FromParamsNormal(CatalystParams &params) {
   result.historyFlipped1 = result.history1.Mirrored();
   result.historyFlipped2 = result.history2.Mirrored();
   result.historyFlippedM = result.historyM.Mirrored();
-  result.approach.approachOn = approach.marked & approach.state;
-  result.approach.approachOff = (approach.marked & ~approach.state) |
+  result.contact = commonContact;
+  for (auto &approachPat : params.approaches) {
+    Approach approach;
+    approach.approachOn = approachPat.marked & approachPat.state;
+    approach.approachOff = (approachPat.marked & ~approachPat.state) |
                        result.state | (result.required & ~result.state);
+    approach.RecalculateSignature();
 
-  assert((result.approach.approachOn & result.approach.approachOff).IsEmpty());
+    assert((approach.approachOn & approach.approachOff).IsEmpty());
+    // More sanity checks?
+
+    result.approaches.push_back(approach);
+  }
 
   for (auto &forbiddenpat : params.forbiddens) {
     Approach approach;
@@ -166,14 +207,6 @@ CatalystData CatalystData::FromParamsNormal(CatalystParams &params) {
     result.forbidden.push_back(approach);
   }
 
-  unsigned contactCount = result.approach.approachOn.CountNeighbours({0, 0});
-  result.contactType =
-    contactCount == 1
-      ? ContactType::CONTACT1
-      : (contactCount == 2 ? ContactType::CONTACT2 : ContactType::CONTACTM);
-
-  result.approach.RecalculateSignature();
-
   result.minRecoveryTime = params.minRecoveryTime;
   result.maxRecoveryTime = params.maxRecoveryTime;
 
@@ -181,12 +214,14 @@ CatalystData CatalystData::FromParamsNormal(CatalystParams &params) {
 
   if constexpr (debug) {
     std::cout << "Loaded catalyst: " << result.state << std::endl;
-    // std::cout << "Params Approach: " << params.approach << std::endl;
-    // std::cout << "Params Required: " << params.required << std::endl;
-    std::cout << "Approach On: " << LifeHistoryState(result.state, LifeState(), result.approach.approachOn) << std::endl;
-    std::cout << "Approach Off: " << LifeHistoryState(result.state, LifeState(), result.approach.approachOff) << std::endl;
     std::cout << "Required: " << LifeHistoryState(result.state, LifeState(), result.required) << std::endl;
     std::cout << "Contact Type: " << result.contactType << std::endl;
+    // std::cout << "Params Approach: " << params.approach << std::endl;
+    // std::cout << "Params Required: " << params.required << std::endl;
+    for (auto &approach : result.approaches) {
+      std::cout << "Approach On: " << LifeHistoryState(result.state, LifeState(), approach.approachOn) << std::endl;
+      std::cout << "Approach Off: " << LifeHistoryState(result.state, LifeState(),approach.approachOff) << std::endl;
+    }
   }
 
   return result;
@@ -204,12 +239,6 @@ CatalystData CatalystData::FromParamsTransparent(CatalystParams &params) {
   result.historyFlipped1 = result.history1.Mirrored();
   result.historyFlipped2 = result.history2.Mirrored();
   result.historyFlippedM = result.historyM.Mirrored();
-
-  result.approach.approachOn = LifeState();
-  result.approach.approachOff = LifeState();
-
-  result.approach.signature = 0;
-  result.approach.signatureMask = 0;
 
   for (auto &forbiddenpat : params.forbiddens) {
     Approach approach;
@@ -240,6 +269,11 @@ CatalystData CatalystData::Transformed(SymmetryTransform t) {
     newForbiddens.push_back(oldForbidden.Transformed(t));
   }
 
+  std::vector<Approach> newApproaches;
+  for (auto &oldApproach : approaches) {
+    newApproaches.push_back(oldApproach.Transformed(t));
+  }
+
   CatalystData result = {
     state.Transformed(t),
     halo.Transformed(t),
@@ -250,7 +284,8 @@ CatalystData CatalystData::Transformed(SymmetryTransform t) {
     historyFlipped1.Transformed(t),
     historyFlipped2.Transformed(t),
     historyFlippedM.Transformed(t),
-    approach.Transformed(t),
+    contact.Transformed(t),
+    newApproaches,
     contactType,
     maxRecoveryTime,
     minRecoveryTime,
@@ -717,23 +752,35 @@ PlacementValidity TestPlacement(const SearchData &data, SearchNode &search,
   if (catalyst.contactType != contactType)
     return PlacementValidity::INVALID_CONTACT;
 
-  if (!catalyst.approach.MatchesSignature(signature))
-    return PlacementValidity::FAILED_CONTACT;
-
   constexpr LifeState originMask = LifeState::NZOIAround({0, 0}, approachRadius);
 
   LifeState centered = state.Moved(-p.pos.first, -p.pos.second);
 
-  LifeState mismatches = (catalyst.approach.approachOn & ~centered) |
-                         (catalyst.approach.approachOff & centered);
+  bool anyValid = false;
+  bool anyValidAtContact = false;
+  for (auto &approach : catalyst.approaches) {
+    if (!approach.MatchesSignature(signature))
+      continue;
 
-  if (!mismatches.IsEmpty()) {
-    if ((originMask & mismatches).IsEmpty()) {
-      return PlacementValidity::FAILED_ELSEWHERE;
+    LifeState mismatches = (approach.approachOn & ~centered) |
+                           (approach.approachOff & centered);
+
+    if (mismatches.IsEmpty()) {
+      anyValid = true;
+      anyValidAtContact = true;
     } else {
-      return PlacementValidity::FAILED_CONTACT;
+      if ((originMask & mismatches).IsEmpty()) {
+        anyValidAtContact = true;
+      } else {
+        //
+      }
     }
   }
+
+  if(!anyValid && anyValidAtContact)
+    return PlacementValidity::FAILED_ELSEWHERE;
+  if(!anyValid && !anyValidAtContact)
+    return PlacementValidity::FAILED_CONTACT;
 
   // TODO: should probably check M too...
 
@@ -840,7 +887,12 @@ std::vector<Placement> CollectPlacements(const SearchParams &params,
           if (catalyst.contactType != contactType)
             continue;
 
-          if (!catalyst.approach.MatchesSignature(signature)) {
+          auto validSig = std::any_of(catalyst.approaches.begin(),
+                                      catalyst.approaches.end(),
+                                      [&](const Approach &approach) {
+                                        return approach.MatchesSignature(signature);
+                                      });
+          if (!validSig) {
             search.constraints[i].knownUnplaceable.Set(cell);
             continue;
           }
