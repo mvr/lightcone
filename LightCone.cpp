@@ -1179,6 +1179,25 @@ void RunSearch(const SearchParams &params, const SearchData &data,
     if (search.constraints[placement.catalystIx].tried.Get(placement.pos))
       continue;
 
+    while(search.lookahead.gen < placement.gen) {
+      LifeState missed = (search.lookahead.state ^ search.config.catalysts).ZOI() & ~problem.LightCone(search.lookahead.gen);
+
+      if (!missed.IsEmpty())
+        break;
+
+      LifeState currentCount1(UNINITIALIZED), currentCount2(UNINITIALIZED),
+        currentCountM(UNINITIALIZED);
+      search.lookahead.state.InteractionCounts(currentCount1, currentCount2, currentCountM);
+
+      search.history1 |= currentCount1;
+      search.history2 |= currentCount2;
+      search.historyM |= currentCountM;
+
+      search.lookahead.Step(search.config);
+
+      if constexpr (debug) std::cout << "Advanced early to " << search.lookahead.state << std::endl;
+    }
+
     search.constraints[placement.catalystIx].tried.Set(placement.pos);
 
     SearchNode newSearch = search;
