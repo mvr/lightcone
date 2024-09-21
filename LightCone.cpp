@@ -846,7 +846,6 @@ std::vector<Placement> CollectPlacements(const SearchParams &params,
     somePlaceable |= ~(search.constraints[i].tried | search.constraints[i].knownUnplaceable);
   }
 
-  bool advanceable = true;
 
   for (unsigned gen = search.lookahead.gen; gen < problem.gen; gen++) {
     if constexpr (debug) std::cout << "Gen " << gen << " state: " << current << std::endl;
@@ -862,8 +861,7 @@ std::vector<Placement> CollectPlacements(const SearchParams &params,
                                  (currentCountM & ~currentHistoryM);
     LifeState lightcone = problem.LightCone(gen);
 
-    if(!advanceable)
-      newContactPoints &= somePlaceable & lightcone;
+    newContactPoints &= somePlaceable & lightcone;
 
     for (auto cell = newContactPoints.FirstOn(); cell != std::make_pair(-1, -1);
          newContactPoints.Erase(cell), cell = newContactPoints.FirstOn()) {
@@ -883,32 +881,26 @@ std::vector<Placement> CollectPlacements(const SearchParams &params,
         const CatalystData &catalyst = data.catalysts[i];
 
         // Fast checks
-        if(!advanceable){
-          if (catalyst.contactType != contactType)
-            continue;
+        if (catalyst.contactType != contactType)
+          continue;
 
-          auto validSig = std::any_of(catalyst.approaches.begin(),
-                                      catalyst.approaches.end(),
-                                      [&](const Approach &approach) {
-                                        return approach.MatchesSignature(signature);
-                                      });
-          if (!validSig) {
-            search.constraints[i].knownUnplaceable.Set(cell);
-            continue;
-          }
+        auto validSig = std::any_of(catalyst.approaches.begin(),
+                                    catalyst.approaches.end(),
+                                    [&](const Approach &approach) {
+                                      return approach.MatchesSignature(signature);
+                                    });
+        if (!validSig) {
+          search.constraints[i].knownUnplaceable.Set(cell);
+          continue;
+        }
 
-          if (search.constraints[i].tried.Get(cell) ||
-              search.constraints[i].knownUnplaceable.Get(cell)) {
-            continue;
-          }
+        if (search.constraints[i].tried.Get(cell) ||
+            search.constraints[i].knownUnplaceable.Get(cell)) {
+          continue;
         }
 
         Placement p = {cell, i, gen};
 
-        if (advanceable && search.constraints[i].knownUnplaceable.Get(cell)) {
-          search.constraints[i].tried.Set(cell);
-          continue;
-        }
 
         if (search.constraints[i].tried.Get(cell))
           continue;
@@ -925,13 +917,8 @@ std::vector<Placement> CollectPlacements(const SearchParams &params,
           break;
         case PlacementValidity::FAILED_CONTACT:
           search.constraints[i].knownUnplaceable.Set(cell);
-          if (advanceable)
-            search.constraints[i].tried.Set(cell);
           break;
         case PlacementValidity::FAILED_ELSEWHERE:
-          if (advanceable)
-            search.constraints[i].tried.Set(cell);
-          break;
         case PlacementValidity::INVALID_CONTACT:
           break;
         }
@@ -981,8 +968,6 @@ std::vector<Placement> CollectPlacements(const SearchParams &params,
 
             if (isForbidden) {
               search.constraints[i].knownUnplaceable.Set(cell);
-              if (advanceable)
-                search.constraints[i].tried.Set(cell);
               continue;
             }
 
@@ -998,19 +983,8 @@ std::vector<Placement> CollectPlacements(const SearchParams &params,
     currentHistory2 |= currentCount2;
     currentHistoryM |= currentCountM;
 
-    if (advanceable && !hasPlacement) {
-      search.lookahead.Step(search.config);
-      current = search.lookahead.state;
-      search.history1 |= currentCount1;
-      search.history2 |= currentCount2;
-      search.historyM |= currentCountM;
+    current.Step();
 
-      if constexpr (debug) std::cout << "Advanced to " << search.lookahead.state << std::endl;
-    } else {
-      current.Step();
-    }
-
-    advanceable = advanceable && !hasPlacement;
   }
 
   return result;
