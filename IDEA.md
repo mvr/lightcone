@@ -69,27 +69,3 @@ We could also allow a catalyst to specify an intermediate state that
 it has to pass through to check it's recovering correctly. This would
 have the biggest impact on traffic-stops and other things with
 extremely long recovery times.
-
-## Locked State
-
-Rather than placing complete catalysts, we should just be placing the 
-
-## TODO
-
-Avoid catalyst placements that immediately interact with other catalysts
-
-Properly collate perturbations done by different catalysts
-    
-Allow partial catalysts/weldling, by having a notion of board that fixes some of the cells to a certain state, can try welding at the end.
-
-Copy over the stable completion code from silk
-
-Do CountNeighbourhoodInteraction more intelligently rather than doing
-the entire sum first.
-
-Allow a single catalyst to have multiple approaches/reaction times
-
-Automatically determine catalyst properties from some input soups
-
-Option to report fizzles only (a la silk)
-

@@ -1287,3 +1287,42 @@ int main(int, char *argv[]) {
               << data.bloom->ApproximateErrorRate() << std::endl;
   }
 }
+
+// Ideas:
+
+// TODO: the main problem is identifying faster when a catalyst
+// placement is bad, without having to re-run the lookahead all the
+// way up to that placement point. Is it correct that when we make a
+// placement, the new problem is *always* after that placement is
+// reached? Then we can pass the state lookahead down to the child
+// edit: this helped a little but not much
+
+// TODO: do a kind of fast pass in `DetermineProblem` for `REQUIRED`
+// violations. this will mean needing to calculate the earliest that a
+// non-`REQUIRED` problem that can happen, and restarting if we reach
+// that point
+
+// TODO: maybe during collect placements, run a life-with-unknowns
+// (together with / instead of influencable) and see whether anything
+// *past* the problem is inevitable
+
+// TODO: use a perfect hash function for the signatures, so they can
+// all be checked quickly (checking signatures may not have a time cost worth
+// worrying about)
+
+// TODO: I have probably killed performance with a lot of these
+// changes...
+
+// TODO: It might be possible to check the `Contains` in
+// `Lookahead::Step` more efficiently. Currently it does a full-board
+// calculation for each placed catalyst, but most catalysts spend most
+// of their time recovered. How about it instead looks at the active
+// cells within the ZOI of a catalyst, and then iterates through those
+// active cells and sees which catalyst they correspond to.
+
+// TODO: debug print when there is a chain of placements that are in
+// reverse generation order. How often does that kind of cascade
+// actually happen?
+
+// TODO: how about checking to see whether the earlier problem still
+// exists, and re-using that problem if so?
