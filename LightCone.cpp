@@ -956,6 +956,14 @@ std::vector<Placement> CollectPlacements(const SearchParams &params,
             Placement p = {cell, i, gen};
 
             LifeState centered = current.Moved(-p.pos.first, -p.pos.second);
+
+            LifeState pastinteractions =
+              (catalyst.history1 & currentHistory2.Moved(-p.pos.first, -p.pos.second)) |
+              (catalyst.history2 & currentHistory1.Moved(-p.pos.first, -p.pos.second));
+            if (!pastinteractions.IsEmpty()) {
+              continue;
+            }
+
             bool isForbidden = false;
             for (auto &f : catalyst.forbidden) {
               LifeState differences = (f.approachOn & ~centered) |
