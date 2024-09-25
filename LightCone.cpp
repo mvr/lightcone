@@ -749,38 +749,40 @@ PlacementValidity TestPlacement(const SearchData &data, SearchNode &search,
 
   // Check that the type of catalyst contact matches the
   // active pattern neighbour count for an contact to occur
-  if (catalyst.contactType != contactType)
+  if (catalyst.contactType != ContactType::TRANSPARENT && catalyst.contactType != contactType)
     return PlacementValidity::INVALID_CONTACT;
 
   constexpr LifeState originMask = LifeState::NZOIAround({0, 0}, approachRadius);
 
   LifeState centered = state.Moved(-p.pos.first, -p.pos.second);
 
-  bool anyValid = false;
-  bool anyValidAtContact = false;
-  for (auto &approach : catalyst.approaches) {
-    if (!approach.MatchesSignature(signature))
-      continue;
+  if (catalyst.approaches.size() > 0) {
+    bool anyValid = false;
+    bool anyValidAtContact = false;
+    for (auto &approach : catalyst.approaches) {
+      if (!approach.MatchesSignature(signature))
+        continue;
 
-    LifeState mismatches = (approach.approachOn & ~centered) |
-                           (approach.approachOff & centered);
+      LifeState mismatches =
+          (approach.approachOn & ~centered) | (approach.approachOff & centered);
 
-    if (mismatches.IsEmpty()) {
-      anyValid = true;
-      anyValidAtContact = true;
-    } else {
-      if ((originMask & mismatches).IsEmpty()) {
+      if (mismatches.IsEmpty()) {
+        anyValid = true;
         anyValidAtContact = true;
       } else {
-        //
+        if ((originMask & mismatches).IsEmpty()) {
+          anyValidAtContact = true;
+        } else {
+          //
+        }
       }
     }
-  }
 
-  if(!anyValid && anyValidAtContact)
-    return PlacementValidity::FAILED_ELSEWHERE;
-  if(!anyValid && !anyValidAtContact)
-    return PlacementValidity::FAILED_CONTACT;
+    if (!anyValid && anyValidAtContact)
+      return PlacementValidity::FAILED_ELSEWHERE;
+    if (!anyValid && !anyValidAtContact)
+      return PlacementValidity::FAILED_CONTACT;
+  }
 
   // TODO: should probably check M too...
 
@@ -949,31 +951,18 @@ std::vector<Placement> CollectPlacements(const SearchParams &params,
                     cell = newContactPoints.FirstOn()) {
             Placement p = {cell, i, gen};
 
-            LifeState centered = current.Moved(-p.pos.first, -p.pos.second);
+            PlacementValidity validity = TestPlacement(
+                data, search, current, p, contactType, signature,
+                currentHistory1, currentHistory2, currentCount1, currentCount2);
 
-            LifeState pastinteractions =
-              (catalyst.history1 & currentHistory2.Moved(-p.pos.first, -p.pos.second)) |
-              (catalyst.history2 & currentHistory1.Moved(-p.pos.first, -p.pos.second));
-            if (!pastinteractions.IsEmpty()) {
-              continue;
+            switch (validity) {
+            case PlacementValidity::VALID:
+              result.push_back(p);
+              break;
+            default:
+              break;
             }
 
-            bool isForbidden = false;
-            for (auto &f : catalyst.forbidden) {
-              LifeState differences = (f.approachOn & ~centered) |
-                                      (f.approachOff & centered);
-              if (differences.IsEmpty()) {
-                isForbidden = true;
-                break;
-              }
-            }
-
-            if (isForbidden) {
-              search.constraints[i].knownUnplaceable.Set(cell);
-              continue;
-            }
-
-            result.push_back(p);
           }
         }
       }
