@@ -850,8 +850,6 @@ std::vector<Placement> CollectPlacements(const SearchParams &params,
   for (unsigned gen = search.lookahead.gen; gen < problem.gen; gen++) {
     if constexpr (debug) std::cout << "Gen " << gen << " state: " << current << std::endl;
 
-    bool hasPlacement = false;
-
     LifeState currentCount1(UNINITIALIZED), currentCount2(UNINITIALIZED),
         currentCountM(UNINITIALIZED);
     current.InteractionCounts(currentCount1, currentCount2, currentCountM);
@@ -865,8 +863,6 @@ std::vector<Placement> CollectPlacements(const SearchParams &params,
 
     for (auto cell = newContactPoints.FirstOn(); cell != std::make_pair(-1, -1);
          newContactPoints.Erase(cell), cell = newContactPoints.FirstOn()) {
-
-      bool inLightcone = lightcone.Get(cell);
 
       ContactType contactType =
           currentCount1.Get(cell)
@@ -911,9 +907,7 @@ std::vector<Placement> CollectPlacements(const SearchParams &params,
 
         switch (validity) {
         case PlacementValidity::VALID:
-          if(inLightcone)
-            result.push_back(p);
-          hasPlacement = true;
+          result.push_back(p);
           break;
         case PlacementValidity::FAILED_CONTACT:
           search.constraints[i].knownUnplaceable.Set(cell);
@@ -979,9 +973,7 @@ std::vector<Placement> CollectPlacements(const SearchParams &params,
               continue;
             }
 
-            if(inLightcone)
-              result.push_back(p);
-            hasPlacement = true;
+            result.push_back(p);
           }
         }
       }
