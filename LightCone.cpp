@@ -852,6 +852,12 @@ std::vector<Placement> CollectPlacements(const SearchParams &params,
   for (unsigned gen = search.lookahead.gen; gen < problem.gen; gen++) {
     if constexpr (debug) std::cout << "Gen " << gen << " state: " << current << std::endl;
 
+    LifeState lightcone = problem.LightCone(gen);
+    LifeState possiblePlacements = somePlaceable & lightcone;
+
+    if (possiblePlacements.IsEmpty())
+      break;
+
     LifeState currentCount1(UNINITIALIZED), currentCount2(UNINITIALIZED),
         currentCountM(UNINITIALIZED);
     current.InteractionCounts(currentCount1, currentCount2, currentCountM);
@@ -859,9 +865,8 @@ std::vector<Placement> CollectPlacements(const SearchParams &params,
     LifeState newContactPoints = (currentCount1 & ~currentHistory1) |
                                  (currentCount2 & ~currentHistory2) |
                                  (currentCountM & ~currentHistoryM);
-    LifeState lightcone = problem.LightCone(gen);
 
-    newContactPoints &= somePlaceable & lightcone;
+    newContactPoints &= possiblePlacements;
 
     for (auto cell = newContactPoints.FirstOn(); cell != std::make_pair(-1, -1);
          newContactPoints.Erase(cell), cell = newContactPoints.FirstOn()) {
