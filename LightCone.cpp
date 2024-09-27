@@ -848,6 +848,7 @@ std::vector<Placement> CollectPlacements(const SearchParams &params,
     somePlaceable |= ~(search.constraints[i].tried | search.constraints[i].knownUnplaceable);
   }
 
+  somePlaceable &= ~(search.history1 & search.history2 & search.historyM);
 
   for (unsigned gen = search.lookahead.gen; gen < problem.gen; gen++) {
     if constexpr (debug) std::cout << "Gen " << gen << " state: " << current << std::endl;
