@@ -213,7 +213,7 @@ CatalystData CatalystData::FromParamsNormal(CatalystParams &params) {
   result.transparent = false;
 
   if constexpr (debug) {
-    std::cout << "Loaded catalyst: " << result.state << std::endl;
+    std::cout << "Loaded catalyst: " << LifeHistoryState(result.state, LifeState(), LifeState::Cell({0, 0})) << std::endl;
     std::cout << "Required: " << LifeHistoryState(result.state, LifeState(), result.required) << std::endl;
     std::cout << "Contact Type: " << result.contactType << std::endl;
     // std::cout << "Params Approach: " << params.approach << std::endl;
@@ -346,6 +346,11 @@ struct Placement {
   unsigned catalystIx;
   unsigned gen;
 };
+
+std::ostream &operator<<(std::ostream &out, const Placement value) {
+  return out << "Placing " << value.catalystIx << " at ("
+             << value.pos.first << ", " << value.pos.second << ") on gen " << value.gen;
+}
 
 // A set of catalyst placements
 // mvrnote: name? Solution?
@@ -923,7 +928,7 @@ void MakePlacement(const SearchParams &params, const SearchData &data,
 void ResetLightcone(const SearchParams &params, const SearchData &data,
                     SearchNode &search, const Placement &placement) {
 
-  if(debug) std::cout << "Resetting lightcone" << std::endl;
+  if constexpr (debug) std::cout << "Resetting lightcone" << std::endl;
 
   LifeState current = search.lookahead.state;
 
@@ -952,7 +957,7 @@ void ResetLightcone(const SearchParams &params, const SearchData &data,
     safeContacts2 |= currentCount2 & ~tooClose;
     safeContactsM |= currentCountM & ~tooClose;
 
-    if(debug) std::cout << LifeHistoryState(current, LifeState(), tooClose) << std::endl;;
+    if constexpr (debug) std::cout << LifeHistoryState(current, LifeState(), tooClose) << std::endl;;
 
     current.Step();
 
@@ -1004,6 +1009,7 @@ void RunSearch(const SearchParams &params, const SearchData &data,
       //   const CatalystData &catalystdata = data.catalysts[p.catalystIx];
       //   const LifeState catalyst = catalystdata.state.Moved(p.pos);
       //   progression |= catalyst;
+      //   std::cout << p << std::endl;
       //   std::cout << progression << std::endl;
       // }
       counter = 0;
@@ -1078,7 +1084,7 @@ void RunSearch(const SearchParams &params, const SearchData &data,
     if constexpr (debug) {
       if (params.hasOracle && !(newSearch.config.state & ~params.oracle).IsEmpty()) {
         if constexpr (debug)
-          std::cout << "Oracle failed: " << newSearch.lookahead.state << std::endl;
+          std::cout << "Oracle failed: " << newSearch.config.state << std::endl;
         continue;
       }
     }
@@ -1090,6 +1096,7 @@ void RunSearch(const SearchParams &params, const SearchData &data,
   }
 
   for (unsigned i = 0; i < subsearches.size(); i++) {
+    if constexpr (debug) std::cout << "Branching node: " << subsearches[i].config.placements.back() << std::endl;
     RunSearch(params, data, subsearches[i], problems[i]);
   }
 }
