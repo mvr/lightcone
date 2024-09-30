@@ -812,10 +812,6 @@ std::vector<Placement> CollectPlacements(const SearchParams &params,
 
         Placement p = {cell, i, gen};
 
-
-        if (search.constraints[i].tried.Get(cell))
-          continue;
-
         PlacementValidity validity = TestPlacement(
             data, search, current, p, contactType, signature, currentHistory1,
             currentHistory2, currentCount1, currentCount2);
