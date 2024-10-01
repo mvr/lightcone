@@ -1073,14 +1073,14 @@ void RunSearch(const SearchParams &params, const SearchData &data,
 
     search.constraints[placement.catalystIx].tried.Set(placement.pos);
 
-    SearchNode newSearch = search;
+    subsearches.push_back(search);
+    SearchNode &newSearch = subsearches.back();
 
     MakePlacement(params, data, newSearch, placement);
 
     ResetLightcone(params, data, newSearch, placement);
 
     problems.push_back(DetermineProblem(params, data, newSearch.config, newSearch));
-    subsearches.push_back(newSearch);
   }
 
   for (unsigned i = 0; i < subsearches.size(); i++) {
