@@ -935,66 +935,6 @@ void MakePlacement(const SearchParams &params, const SearchData &data,
   }
 }
 
-void ResetLightcone(const SearchParams &params, const SearchData &data,
-                    SearchNode &search, const Placement &placement) {
-
-  if constexpr (debug) std::cout << "Resetting lightcone" << std::endl;
-
-  LifeState current = search.lookahead.state;
-
-  LifeState safeContacts1, safeContacts2, safeContactsM;
-
-  // +1, because the first perturbation happens the generation after the placement
-  for (unsigned gen = search.lookahead.gen; gen < placement.gen + 1; gen++) {
-    LifeState currentCount1(UNINITIALIZED), currentCount2(UNINITIALIZED), currentCountM(UNINITIALIZED);
-    current.InteractionCounts(currentCount1, currentCount2, currentCountM);
-    safeContacts1 |= currentCount1;
-    safeContacts2 |= currentCount2;
-    safeContactsM |= currentCountM;
-
-    current.Step();
-  }
-
-  LifeState tooClose = LifeState::NZOIAround(placement.pos, approachRadius);
-
-  // Until the universe is covered
-  // TODO: this is a lot of generations, is there a sensible time to stop
-  // sooner?
-  for (int i = 2 * approachRadius + 1; i < lightconeResetRadius * 2; i += 2) {
-    LifeState currentCount1(UNINITIALIZED), currentCount2(UNINITIALIZED), currentCountM(UNINITIALIZED);
-    current.InteractionCounts(currentCount1, currentCount2, currentCountM);
-    safeContacts1 |= currentCount1 & ~tooClose;
-    safeContacts2 |= currentCount2 & ~tooClose;
-    safeContactsM |= currentCountM & ~tooClose;
-
-    if constexpr (debug) std::cout << LifeHistoryState(current, LifeState(), tooClose) << std::endl;;
-
-    current.Step();
-
-    // Is it faster to just recompute the `NZOIAround`?
-    tooClose = tooClose.ZOI();
-  }
-
-  // Now invalidate every placement that isn't safe
-  // (Doesn't reset the `tried` field)
-  for (unsigned i = 0; i < data.catalysts.size(); i++) {
-    switch (data.catalysts[i].contactType) {
-    case ContactType::CONTACT1:
-      search.constraints[i].knownUnplaceable &= safeContacts1;
-      break;
-    case ContactType::CONTACT2:
-      search.constraints[i].knownUnplaceable &= safeContacts2;
-      break;
-    case ContactType::CONTACTM:
-      search.constraints[i].knownUnplaceable &= safeContactsM;
-      break;
-    case ContactType::TRANSPARENT:
-      // They are always placeable
-      break;
-    }
-  }
-}
-
 void RunSearch(const SearchParams &params, const SearchData &data,
                SearchNode &search, Problem problem) {
   if constexpr (debug) std::cout << "Starting node: " << search.config.state << std::endl;
@@ -1063,36 +1003,48 @@ void RunSearch(const SearchParams &params, const SearchData &data,
   problems.reserve(placements.size());
 
   Lookahead nextPlacementLookahead = search.lookahead;
+  LifeState safeContacts1, safeContacts2, safeContactsM;
+  bool advanceable = true;
 
   for (auto &placement : placements) {
     if (search.constraints[placement.catalystIx].tried.Get(placement.pos))
       continue;
 
     // Placements must be in generation order for this to make sense!
-    while(search.lookahead.gen < placement.gen) {
-      LifeState missed = (search.lookahead.state ^ search.config.catalysts).ZOI() & ~problem.LightCone(search.lookahead.gen);
-
-      if (!missed.IsEmpty())
-        break;
-
+    while (nextPlacementLookahead.gen < placement.gen) {
       LifeState currentCount1(UNINITIALIZED), currentCount2(UNINITIALIZED),
         currentCountM(UNINITIALIZED);
-      search.lookahead.state.InteractionCounts(currentCount1, currentCount2, currentCountM);
+      nextPlacementLookahead.state.InteractionCounts(currentCount1, currentCount2, currentCountM);
 
-      search.history1 |= currentCount1;
-      search.history2 |= currentCount2;
-      search.historyM |= currentCountM;
+      if (search.config.numCatalysts > 0) {
+        auto lastPlacement = search.config.placements.back();
+        if(search.lookahead.gen <= lastPlacement.gen) {
+          safeContacts1 |= currentCount1;
+          safeContacts2 |= currentCount2;
+          safeContactsM |= currentCountM;
+        } else {
+          LifeState tooClose = LifeState::NZOIAround(placement.pos, approachRadius + search.lookahead.gen - lastPlacement.gen - 1);
+          safeContacts1 |= currentCount1 & ~tooClose;
+          safeContacts2 |= currentCount2 & ~tooClose;
+          safeContactsM |= currentCountM & ~tooClose;
+        }
+      }
 
-      search.lookahead.Step(search.config);
-
-      if constexpr (debug) std::cout << "Advanced early to " << search.lookahead.state << std::endl;
-    }
-
-    if (nextPlacementLookahead.gen < search.lookahead.gen)
-      nextPlacementLookahead = search.lookahead;
-
-    while (nextPlacementLookahead.gen < placement.gen) {
       nextPlacementLookahead.Step(search.config);
+
+      if (advanceable) {
+        LifeState missed = (search.lookahead.state ^ search.config.catalysts).ZOI() & ~problem.LightCone(search.lookahead.gen);
+
+        if (!missed.IsEmpty()) {
+          advanceable = false;
+        } else {
+          search.history1 |= currentCount1;
+          search.history2 |= currentCount2;
+          search.historyM |= currentCountM;
+          search.lookahead = nextPlacementLookahead;
+          if constexpr (debug) std::cout << "Advanced early to " << search.lookahead.state << std::endl;
+        }
+      }
     }
 
     search.constraints[placement.catalystIx].tried.Set(placement.pos);
@@ -1102,7 +1054,25 @@ void RunSearch(const SearchParams &params, const SearchData &data,
 
     MakePlacement(params, data, newSearch, placement);
 
-    ResetLightcone(params, data, newSearch, placement);
+    // Now invalidate every placement that isn't safe
+    // (Doesn't reset the `tried` field)
+    for (unsigned i = 0; i < data.catalysts.size(); i++) {
+      switch (data.catalysts[i].contactType) {
+      case ContactType::CONTACT1:
+        newSearch.constraints[i].knownUnplaceable &= safeContacts1;
+        break;
+      case ContactType::CONTACT2:
+        newSearch.constraints[i].knownUnplaceable &= safeContacts2;
+        break;
+      case ContactType::CONTACTM:
+        newSearch.constraints[i].knownUnplaceable &= safeContactsM;
+        break;
+      case ContactType::TRANSPARENT:
+        newSearch.constraints[i].knownUnplaceable = LifeState();
+        // They are always placeable
+        break;
+      }
+    }
 
     Lookahead placed = nextPlacementLookahead;
     placed.state |= data.catalysts[placement.catalystIx].state.Moved(placement.pos);
