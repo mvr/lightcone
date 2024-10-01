@@ -114,6 +114,7 @@ struct CatalystData {
   CatalystData Transformed(SymmetryTransform t);
 
   LifeState CollisionMask(const CatalystData &b) const;
+  unsigned ContactRadius() const;
 };
 
 CatalystData CatalystData::FromParamsNormal(CatalystParams &params) {
@@ -334,10 +335,16 @@ LifeState CatalystData::CollisionMask(const CatalystData &b) const {
   return result;
 }
 
+unsigned CatalystData::ContactRadius() const {
+  auto [x1,y1,x2,y2] = contact.XYBounds();
+  return std::max({std::abs(x1), std::abs(y1), std::abs(x2), std::abs(y1)});
+}
+
 // Any precomputed data, constant at every node
 struct SearchData {
   std::vector<CatalystData> catalysts;
   std::vector<LifeState> collisionMasks;
+  unsigned contactRadius;
   LifeBloom *bloom;
 };
 
@@ -761,7 +768,8 @@ std::vector<Placement> CollectPlacements(const SearchParams &params,
     if constexpr (debug) std::cout << "Gen " << gen << " state: " << current << std::endl;
 
     LifeState lightcone = problem.LightCone(gen);
-    LifeState possiblePlacements = somePlaceable & lightcone;
+    LifeState lightconeMargin = problem.LightCone(gen - data.contactRadius);
+    LifeState possiblePlacements = somePlaceable & lightconeMargin;
 
     if (possiblePlacements.IsEmpty())
       break;
@@ -810,6 +818,14 @@ std::vector<Placement> CollectPlacements(const SearchParams &params,
           continue;
         }
 
+        if (!lightcone.Get(cell)) {
+          // Need to make sure at least one contact cell is actually in the
+          // lightcone
+          // TODO: this should be checked by a faster method
+          if ((catalyst.contact.Moved(cell) & lightcone).IsEmpty())
+            continue;
+        }
+
         Placement p = {cell, i, gen};
 
         PlacementValidity validity = TestPlacement(
@@ -830,7 +846,7 @@ std::vector<Placement> CollectPlacements(const SearchParams &params,
       }
 
       // Handle transparent catalysts
-      if (search.config.numTransparent < params.maxTransparent) {
+      if (search.config.numTransparent < params.maxTransparent && lightcone.Get(cell)) {
         for (unsigned i = 0; i < data.catalysts.size(); i++) {
           const CatalystData &catalyst = data.catalysts[i];
           if (catalyst.contactType != ContactType::TRANSPARENT)
@@ -1163,13 +1179,18 @@ int main(int, char *argv[]) {
     catalystdata.insert(catalystdata.end(), newdata.begin(), newdata.end()); // Why is C++ like this
   }
 
+  unsigned contactRadius = 0;
+  for (auto &c : catalystdata) {
+    contactRadius = std::max(contactRadius, c.ContactRadius());
+  }
+
   std::vector<LifeState> masks = CalculateCollisionMasks(catalystdata);
 
   LifeBloom *bloom = 0;
   if (params.useBloomFilter)
     bloom = new LifeBloom();
 
-  SearchData data = {catalystdata, masks, bloom};
+  SearchData data = {catalystdata, masks, contactRadius, bloom};
 
   SearchNode search(params, data);
 
