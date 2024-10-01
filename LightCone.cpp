@@ -1077,14 +1077,6 @@ void RunSearch(const SearchParams &params, const SearchData &data,
 
     MakePlacement(params, data, newSearch, placement);
 
-    if constexpr (debug) {
-      if (params.hasOracle && !(newSearch.config.state & ~params.oracle).IsEmpty()) {
-        if constexpr (debug)
-          std::cout << "Oracle failed: " << newSearch.config.state << std::endl;
-        continue;
-      }
-    }
-
     ResetLightcone(params, data, newSearch, placement);
 
     problems.push_back(DetermineProblem(params, data, newSearch.config, newSearch));
@@ -1092,7 +1084,14 @@ void RunSearch(const SearchParams &params, const SearchData &data,
   }
 
   for (unsigned i = 0; i < subsearches.size(); i++) {
+    if constexpr (debug) {
+      if (params.hasOracle && !(subsearches[i].config.state & ~params.oracle).IsEmpty()) {
+        std::cout << "Oracle failed: " << subsearches[i].config.state << std::endl;
+        continue;
+      }
+    }
     if constexpr (debug) std::cout << "Branching node: " << subsearches[i].config.placements.back() << std::endl;
+
     RunSearch(params, data, subsearches[i], problems[i]);
   }
 }
