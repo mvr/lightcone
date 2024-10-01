@@ -611,9 +611,7 @@ struct SearchNode {
 };
 
 Problem DetermineProblem(const SearchParams &params, const SearchData &data,
-                         const Configuration &config, SearchNode &search) {
-  Lookahead lookahead = search.lookahead;
-
+                         const Configuration &config, SearchNode &search, Lookahead &lookahead) {
   while (true) {
     lookahead.Step(config);
 
@@ -1064,10 +1062,13 @@ void RunSearch(const SearchParams &params, const SearchData &data,
   std::vector<Problem> problems;
   problems.reserve(placements.size());
 
+  Lookahead nextPlacementLookahead = search.lookahead;
+
   for (auto &placement : placements) {
     if (search.constraints[placement.catalystIx].tried.Get(placement.pos))
       continue;
 
+    // Placements must be in generation order for this to make sense!
     while(search.lookahead.gen < placement.gen) {
       LifeState missed = (search.lookahead.state ^ search.config.catalysts).ZOI() & ~problem.LightCone(search.lookahead.gen);
 
@@ -1087,6 +1088,13 @@ void RunSearch(const SearchParams &params, const SearchData &data,
       if constexpr (debug) std::cout << "Advanced early to " << search.lookahead.state << std::endl;
     }
 
+    if (nextPlacementLookahead.gen < search.lookahead.gen)
+      nextPlacementLookahead = search.lookahead;
+
+    while (nextPlacementLookahead.gen < placement.gen) {
+      nextPlacementLookahead.Step(search.config);
+    }
+
     search.constraints[placement.catalystIx].tried.Set(placement.pos);
 
     subsearches.push_back(search);
@@ -1096,7 +1104,12 @@ void RunSearch(const SearchParams &params, const SearchData &data,
 
     ResetLightcone(params, data, newSearch, placement);
 
-    problems.push_back(DetermineProblem(params, data, newSearch.config, newSearch));
+    Lookahead placed = nextPlacementLookahead;
+    placed.state |= data.catalysts[placement.catalystIx].state.Moved(placement.pos);
+    placed.missingTime.push_back(0);
+    placed.catalystHasInteracted.push_back(false);
+
+    problems.push_back(DetermineProblem(params, data, newSearch.config, newSearch, placed));
   }
 
   for (unsigned i = 0; i < subsearches.size(); i++) {
@@ -1196,7 +1209,8 @@ int main(int, char *argv[]) {
 
   search.BlockEarlyInteractions(params, data);
 
-  Problem problem = DetermineProblem(params, data, search.config, search);
+  Lookahead lookahead = search.lookahead;
+  Problem problem = DetermineProblem(params, data, search.config, search, lookahead);
 
   RunSearch(params, data, search, problem);
   if (params.useBloomFilter) {
