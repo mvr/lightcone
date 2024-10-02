@@ -9,9 +9,9 @@
 
 const uint64_t bloomSeed = 19;
 // Via https://hur.st/bloomfilter/
-const unsigned long long bloomSize = 8ULL * 1024 * 1024 * 8; // 8MiB
+const unsigned long long bloomSize = 8ULL * 1024 * 1024 * 512; // 512MiB
 const unsigned bloomHashes = 33;
-const unsigned bloomClearThreshold = 1400000; // 1E-10 error rate
+const unsigned bloomClearThreshold = 89617969; // 1E-10 error rate
 
 struct LifeBloom {
   std::array<uint64_t, bloomSize / 64> table;
