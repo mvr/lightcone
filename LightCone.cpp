@@ -16,7 +16,6 @@ const auto debug_bloom_pattern = "";
 const auto debug_bloom_key = "";
 
 const unsigned approachRadius = 2; // Needs to match catalyst input
-const unsigned lightconeResetRadius = 0;
 const unsigned placementRequiredLookahead = 0;
 const unsigned bloomPopulationThreshold = 12; // Min population
 
@@ -364,7 +363,6 @@ std::ostream &operator<<(std::ostream &out, const Placement value) {
 }
 
 // A set of catalyst placements
-// mvrnote: name? Solution?
 struct Configuration {
   LifeState state;
   LifeState catalysts;
@@ -632,7 +630,6 @@ Problem DetermineProblem(const SearchParams &params, const SearchData &data,
     if (problem.type != ProblemType::NONE)
       return problem;
 
-    // TODO: reduce duplication
     if (params.useBloomFilter) {
       auto [key, valid] = lookahead.BloomKey(config);
 
@@ -996,7 +993,6 @@ void RunSearch(const SearchParams &params, const SearchData &data,
   }
 
   if (problem.type == ProblemType::WINNER) {
-    // TODO report properly!
     std::cout << "Winner: " << search.config.state << std::endl;
     if constexpr (debug) {
       std::cout << "Required: " << LifeHistoryState(search.config.state, LifeState(), search.config.required) << std::endl;
