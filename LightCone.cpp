@@ -11,6 +11,10 @@ const bool debug = false;
 const bool print_progress = true;
 const unsigned print_progress_frequency = 1000000;
 
+const bool debug_bloom = false;
+const auto debug_bloom_pattern = "";
+const auto debug_bloom_key = "";
+
 const unsigned approachRadius = 2; // Needs to match catalyst input
 const unsigned lightconeResetRadius = 0;
 const unsigned placementRequiredLookahead = 0;
@@ -557,8 +561,14 @@ Problem Lookahead::Problem(const SearchParams &params, const SearchData &data,
     auto [key, valid] = BloomKey(config);
     if(valid) {
       bool seen = data.bloom->Lookup(key);
-      if (seen)
+      if (seen) {
+        if constexpr (debug_bloom) {
+          if ((config.state & ~LifeState::ConstantParse(debug_bloom_pattern).Moved(-32,-32)).IsEmpty()) {
+            std::cout << "Key here! " << key << std::endl;
+          }
+        }
         return {{-1, -1}, gen, ProblemType::BLOOM_SEEN};
+      }
     }
   }
 
@@ -625,6 +635,12 @@ Problem DetermineProblem(const SearchParams &params, const SearchData &data,
     // TODO: reduce duplication
     if (params.useBloomFilter) {
       auto [key, valid] = lookahead.BloomKey(config);
+
+      if constexpr (debug_bloom) {
+        if (key == LifeState::ConstantParse(debug_bloom_key).Moved(-32, -32)) {
+          std::cout << "Inserted here! " << config.state << std::endl;
+        }
+      }
 
       if(valid)
         data.bloom->Insert(key);
