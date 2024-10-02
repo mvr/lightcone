@@ -1209,7 +1209,7 @@ int main(int, char *argv[]) {
 
 // Ideas:
 
-// TODO: the main problem is identifying faster when a catalyst
+// DONE: the main problem is identifying faster when a catalyst
 // placement is bad, without having to re-run the lookahead all the
 // way up to that placement point. Is it correct that when we make a
 // placement, the new problem is *always* after that placement is
@@ -1225,12 +1225,17 @@ int main(int, char *argv[]) {
 // (together with / instead of influencable) and see whether anything
 // *past* the problem is inevitable
 
+// This seems like it could happen at branching time rather than
+// collection time, we can keep track of "influencable" cells and do a
+// short lookahead at each placement to see if `required` is broken.
+
+
 // TODO: use a perfect hash function for the signatures, so they can
 // all be checked quickly (checking signatures may not have a time cost worth
 // worrying about)
 
 // TODO: I have probably killed performance with a lot of these
-// changes...
+// changes... need to do some profiling
 
 // TODO: It might be possible to check the `Contains` in
 // `Lookahead::Step` more efficiently. Currently it does a full-board
@@ -1245,3 +1250,18 @@ int main(int, char *argv[]) {
 
 // TODO: how about checking to see whether the earlier problem still
 // exists, and re-using that problem if so?
+
+// TODO: should transparent catalysts be split into many copies,
+// differing in which cell gets hit first? This might streamline some
+// of their handling
+
+// DONE: argh, I really wanted to test just one contact cell per
+// catalyst. But we can get unlucky and choose the wrong contact cell,
+// and interactions right on the edge of the light cone can get
+// dropped.
+
+// DONE: ResetLightcone could be merged into the main loop, it may be
+// worth it
+
+// TODO: there are some very small LifeStates that could be stored/queried
+// more efficiently by just storing the cell coordinates
