@@ -16,7 +16,7 @@ const auto debug_bloom_pattern = "";
 const auto debug_bloom_key = "";
 
 const unsigned approachRadius = 2; // Needs to match catalyst input
-const unsigned placementRequiredLookahead = 0;
+const unsigned placementRequiredLookahead = 4; // This value is borderline unsafe, any larger drops solutions
 const unsigned bloomPopulationThreshold = 12; // Min population
 
 const unsigned maxStationaryGens = 64 - 1;
