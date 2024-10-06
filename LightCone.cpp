@@ -551,9 +551,12 @@ Problem Lookahead::Problem(const SearchParams &params, const SearchData &data,
       return {{-1, -1}, gen, ProblemType::NO_REACTION};
   }
 
-  {
-    if (gen > startTime + params.maxActiveWindowGens && hasInteracted)
-      return {{-1, -1}, gen, ProblemType::TOO_LONG};
+  if (gen > startTime + params.maxActiveWindowGens && hasInteracted) {
+    // TODO: this should be config.catalystsZOI & (config.catalysts ^ state)
+    LifeState active = config.catalysts & ~state;
+    std::pair<int, int> cell = active.FirstOn();
+    if (cell != std::make_pair(-1, -1))
+      return {cell, gen, ProblemType::TOO_LONG};
   }
 
   {
@@ -590,10 +593,10 @@ LifeState Problem::LightCone(unsigned currentgen) {
   case ProblemType::UNRECOVERED:
   case ProblemType::NOT_TRANSPARENT:
   case ProblemType::STATIONARY:
+  case ProblemType::TOO_LONG:
     return LifeState::NZOIAround(cell, gen - currentgen - 1);
   case ProblemType::WINNER:
   case ProblemType::NO_REACTION:
-  case ProblemType::TOO_LONG:
   case ProblemType::BLOOM_SEEN:
     return ~LifeState();
   case ProblemType::NONE:
@@ -785,6 +788,9 @@ std::vector<Placement> CollectPlacements(const SearchParams &params,
 
   for (unsigned gen = search.lookahead.gen; gen < problem.gen; gen++) {
     if constexpr (debug) std::cout << "Gen " << gen << " state: " << current << std::endl;
+
+    if (search.lookahead.hasInteracted && gen > search.lookahead.startTime + params.maxActiveWindowGens)
+      break;
 
     LifeState lightcone = problem.LightCone(gen);
     LifeState lightconeMargin = problem.LightCone(gen - data.contactRadius);
