@@ -95,6 +95,7 @@ struct SearchParams {
   unsigned minActiveWindowGens;
   unsigned maxActiveWindowGens;
   unsigned maxStationaryTime;
+  unsigned maxStationaryCount;
 
   bool useBloomFilter;
 
@@ -133,6 +134,7 @@ SearchParams SearchParams::FromToml(toml::value &toml) {
   params.maxActiveWindowGens = windowRange[1];
 
   params.maxStationaryTime = toml::find_or(toml, "max-stationary-time", 0);
+  params.maxStationaryCount = toml::find_or(toml, "max-stationary-count", 0);
 
   params.useBloomFilter = toml::find_or(toml, "use-bloom-filter", false);
 

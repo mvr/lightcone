@@ -505,10 +505,15 @@ Problem Lookahead::Problem(const SearchParams &params, const SearchData &data,
   }
 
   if (params.maxStationaryTime != 0) {
-    LifeState stationaryViolations = stationaryCountdown.finished;
-    std::pair<int, int> cell = stationaryViolations.FirstOn();
-    if (cell != std::make_pair(-1, -1))
-      return {cell, gen, ProblemType::STATIONARY};
+    const LifeState &stationaryViolations = stationaryCountdown.finished;
+    if(params.maxStationaryCount == 0 || stationaryCountdown.finished.GetPop() > params.maxStationaryCount) {
+      // TODO: This is not quite right: this is choosing a violation
+      // at random rather than taking the union of them all. But I
+      // don't want to store an entire LifeState in the Problem struct
+      std::pair<int, int> cell = stationaryViolations.FirstOn();
+      if (cell != std::make_pair(-1, -1))
+        return {cell, gen, ProblemType::STATIONARY};
+    }
   }
 
   {
