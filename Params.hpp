@@ -105,6 +105,8 @@ struct SearchParams {
   bool hasForbidden;
   std::vector<Forbidden> forbiddens;
 
+  bool printSummary;
+
   std::string outputFile;
 
   bool debug;
@@ -138,6 +140,7 @@ SearchParams SearchParams::FromToml(toml::value &toml) {
 
   params.useBloomFilter = toml::find_or(toml, "use-bloom-filter", false);
 
+  params.printSummary = toml::find_or(toml, "print-summary", false);
   params.outputFile = toml::find_or(toml, "output-file", "lightcone-output.rle");
 
   std::vector<int> patternCenterVec = toml::find_or<std::vector<int>>(toml, "pattern-center", {0, 0});

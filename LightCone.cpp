@@ -343,14 +343,6 @@ unsigned CatalystData::ContactRadius() const {
   return std::max({std::abs(x1), std::abs(y1), std::abs(x2), std::abs(y1)});
 }
 
-// Any precomputed data, constant at every node
-struct SearchData {
-  std::vector<CatalystData> catalysts;
-  std::vector<LifeState> collisionMasks;
-  unsigned contactRadius;
-  LifeBloom *bloom;
-};
-
 struct Placement {
   std::pair<int, int> pos;
   unsigned catalystIx;
@@ -380,6 +372,15 @@ struct Configuration {
   Configuration()
       : state{}, catalysts{}, required{}, numCatalysts{0}, numTransparent{0},
         lastInteraction{0}, placements{}, targets{}, transparent{} {}
+};
+
+// Any precomputed data, constant at every node
+struct SearchData {
+  std::vector<CatalystData> catalysts;
+  std::vector<LifeState> collisionMasks;
+  unsigned contactRadius;
+  LifeBloom *bloom;
+  std::vector<Configuration> *allSolutions;
 };
 
 enum struct ProblemType {
@@ -1008,6 +1009,7 @@ void RunSearch(const SearchParams &params, const SearchData &data,
 
   if (problem.type == ProblemType::WINNER) {
     std::cout << "Winner: " << search.config.state << std::endl;
+    data.allSolutions->push_back(search.config);
     if constexpr (debug) {
       std::cout << "Required: " << LifeHistoryState(search.config.state, LifeState(), search.config.required) << std::endl;
       for (auto &p : search.config.placements) {
@@ -1178,9 +1180,23 @@ SearchNode::SearchNode(const SearchParams &params, const SearchData &data) {
   }
 }
 
+void PrintSummary(std::vector<Configuration> &pats) {
+  std::cout << "x = 0, y = 0, rule = B3/S23" << std::endl;
+  for (unsigned i = 0; i < pats.size(); i += 8) {
+    std::vector<Configuration> rowConfigurations = std::vector<Configuration>(pats.begin() + i, pats.begin() + std::min((unsigned)pats.size(), i + 8));
+    std::vector<LifeState> row;
+    for (auto &s : rowConfigurations) {
+      row.push_back(s.state);
+    }
+    std::cout << RowRLE(row) << std::endl;
+  }
+}
+
 int main(int, char *argv[]) {
   auto toml = toml::parse(argv[1]);
   SearchParams params = SearchParams::FromToml(toml);
+
+  std::vector<Configuration> allSolutions;
 
   std::vector<CatalystData> catalystdata;
   for (auto &c : params.catalysts) {
@@ -1199,7 +1215,7 @@ int main(int, char *argv[]) {
   if (params.useBloomFilter)
     bloom = new LifeBloom();
 
-  SearchData data = {catalystdata, masks, contactRadius, bloom};
+  SearchData data = {catalystdata, masks, contactRadius, bloom, &allSolutions};
 
   SearchNode search(params, data);
 
@@ -1209,6 +1225,12 @@ int main(int, char *argv[]) {
   Problem problem = DetermineProblem(params, data, search.config, search, lookahead);
 
   RunSearch(params, data, search, problem);
+
+  if (params.printSummary) {
+    std::cout << "All solutions:" << std::endl;
+    PrintSummary(allSolutions);
+  }
+
   if (params.useBloomFilter) {
     std::cout << "Bloom filter population: " << data.bloom->items << std::endl;
     std::cout << "Bloom filter approx    : "
