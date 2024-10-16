@@ -1310,16 +1310,15 @@ int main(int, char *argv[]) {
 
 // TODO: maybe during collect placements, run a life-with-unknowns
 // (together with / instead of influencable) and see whether anything
-// *past* the problem is inevitable
-
-// This seems like it could happen at branching time rather than
-// collection time, we can keep track of "influencable" cells and do a
-// short lookahead at each placement to see if `required` is broken.
-
+// *past* the problem is inevitable. This seems like it could happen
+// at branching time rather than collection time, we can keep track of
+// "influencable" cells and do a short lookahead at each placement to
+// see if `required` is broken. On reflection, the lightcone placement
+// reasoning should basically handle this
 
 // TODO: use a perfect hash function for the signatures, so they can
-// all be checked quickly (checking signatures may not have a time cost worth
-// worrying about)
+// all be checked quickly (checking signatures may not have a time
+// cost worth worrying about)
 
 // TODO: I have probably killed performance with a lot of these
 // changes... need to do some profiling
@@ -1331,24 +1330,52 @@ int main(int, char *argv[]) {
 // cells within the ZOI of a catalyst, and then iterates through those
 // active cells and sees which catalyst they correspond to.
 
-// TODO: debug print when there is a chain of placements that are in
+// TODO: Output when there is a chain of placements that are in
 // reverse generation order. How often does that kind of cascade
 // actually happen?
 
-// TODO: how about checking to see whether the earlier problem still
-// exists, and re-using that problem if so?
-
 // TODO: should transparent catalysts be split into many copies,
 // differing in which cell gets hit first? This might streamline some
-// of their handling
+// of their handling, but we would have to be more careful about
+// avoiding identical placements coming from different copies.
 
-// DONE: argh, I really wanted to test just one contact cell per
-// catalyst. But we can get unlucky and choose the wrong contact cell,
-// and interactions right on the edge of the light cone can get
-// dropped.
+// DONE: I really wanted to test just one contact cell per catalyst.
+// But we can get unlucky and choose the wrong contact cell, and
+// interactions right on the edge of the lightcone can get dropped.
 
-// DONE: ResetLightcone could be merged into the main loop, it may be
+// DONE: `ResetLightcone` could be merged into the main loop, it may be
 // worth it
 
-// TODO: there are some very small LifeStates that could be stored/queried
-// more efficiently by just storing the cell coordinates
+// TODO: There are some very small `LifeState`s that could be
+// stored/queried more efficiently by just storing the cell
+// coordinates
+
+// TODO: Allow non-transparent catalysts that don't supply an approach
+
+// TODO: How about checking to see whether the earlier problem still
+// exists, and re-using that problem if so? There should be a
+// threshold where if a new placement explodes fast enough, we use
+// that new problem, otherwise we use the old one. Otherwise, we place
+// a bunch of hopeless catalysts to solve the original problem. Or, if
+// the new placement causes a problem contained in the lightcone of
+// the previous one, then there is no harm solving that more recent
+// problem first. After trying this, there's an issue: it will place a
+// dense field of failing catalysts, all contained within the
+// lightcone of the original problem. We will need some strategy like
+// avoiding placements that are within the lightcone of known
+// problems.
+
+// TODO: Another idea is to identify the problem with the fewest
+// remaining interaction points in its lightcone, and then try to
+// solve that one. Or could it be good enough to just identify when an
+// early problem has had all its interaction points run out?g
+
+// TODO: Or maybe, we prefer problems that occur in the lightcone of
+// the previous problem.
+
+// DONE: We could add a `max-stationary-count` constraint that allows
+// some number of cells to be stationary, rather than forbidding them
+// all
+
+// TODO: Reordering the placements to put nearby ones closer together
+// might help the bloom filter out
