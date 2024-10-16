@@ -438,7 +438,9 @@ struct Problem {
   unsigned gen;
   ProblemType type;
 
-  LifeState LightCone(unsigned gen);
+  LifeState LightCone(unsigned gen) const;
+  bool IsGlobal() const;
+  bool Subsumes(Problem other) const;
 };
 
 std::ostream &operator<<(std::ostream &out, const Problem value) {
@@ -607,7 +609,7 @@ Problem Lookahead::Problem(const SearchParams &params, const SearchData &data,
 
 // Contact points that are close enough to the current problem to
 // have an effect on it.
-LifeState Problem::LightCone(unsigned currentgen) {
+LifeState Problem::LightCone(unsigned currentgen) const {
   switch (type) {
   case ProblemType::REQUIRED:
   case ProblemType::FILTER:
@@ -615,7 +617,7 @@ LifeState Problem::LightCone(unsigned currentgen) {
   case ProblemType::NOT_TRANSPARENT:
   case ProblemType::STATIONARY:
   case ProblemType::TOO_LONG:
-    return LifeState::NZOIAround(cell, gen - currentgen - 1);
+    return LifeState::NZOIAround(cell, std::abs((int)gen - (int)currentgen - 1));
   case ProblemType::WINNER:
   case ProblemType::NO_REACTION:
   case ProblemType::BLOOM_SEEN:
@@ -623,6 +625,38 @@ LifeState Problem::LightCone(unsigned currentgen) {
   case ProblemType::NONE:
     __builtin_unreachable();
   }
+}
+
+bool Problem::IsGlobal() const {
+  switch (type) {
+  case ProblemType::REQUIRED:
+  case ProblemType::FILTER:
+  case ProblemType::UNRECOVERED:
+  case ProblemType::NOT_TRANSPARENT:
+  case ProblemType::STATIONARY:
+  case ProblemType::TOO_LONG:
+    return false;
+  case ProblemType::WINNER:
+  case ProblemType::NO_REACTION:
+  case ProblemType::BLOOM_SEEN:
+  case ProblemType::NONE:
+    return true;
+  }
+}
+
+
+// Sooner and smaller
+bool Problem::Subsumes(Problem other) const {
+  if (gen >= other.gen) return false;
+
+  if (IsGlobal())
+    return false;
+
+  if (!IsGlobal() && other.IsGlobal())
+    return true;
+
+  // Now neither is global
+  return other.LightCone(gen).Get(cell);
 }
 
 // mvrnote: name?
