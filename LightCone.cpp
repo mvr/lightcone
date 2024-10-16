@@ -329,13 +329,33 @@ LifeState CatalystData::CollisionMask(const CatalystData &b) const {
   // Block immediate births
   LifeState result = state.InteractionOffsets(b.state);
 
-  // Block active interacting with required
+  // Block active intersecting with required
   result |= (state.ZOI() & ~required).Convolve(b.required.Mirrored());
 
   // And vice versa
   result |= (b.state.ZOI() & ~b.required).Mirrored().Convolve(required);
 
-  return result;
+  LifeState newresult;
+
+  LifeState selfActive = (state.ZOI() & ~required) | state;
+  // LifeState activeCount1(UNINITIALIZED), activeCount2(UNINITIALIZED), activeCountM(UNINITIALIZED);
+  // selfActive.InteractionCounts(activeCount1, activeCount2, activeCountM);
+
+  // newresult |= activeCount2.Convolve((b.required & b.history1).Mirrored());
+  // newresult |= activeCount1.Convolve((b.required & b.history2).Mirrored());
+
+  newresult |= selfActive.Convolve(b.contact.Mirrored());
+
+  LifeState bActive = (b.state.ZOI() & ~b.required) | b.state;
+  // LifeState bActiveCount1(UNINITIALIZED), bActiveCount2(UNINITIALIZED), bActiveCountM(UNINITIALIZED);
+  // bActive.InteractionCounts(bActiveCount1, bActiveCount2, bActiveCountM);
+
+  // newresult |= bActiveCount2.Mirrored().Convolve(required & history1);
+  // newresult |= bActiveCount1.Mirrored().Convolve(required & history2);
+
+  newresult |= bActive.Mirrored().Convolve(contact);
+
+  return result | newresult;
 }
 
 unsigned CatalystData::ContactRadius() const {
