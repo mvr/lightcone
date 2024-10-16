@@ -1250,6 +1250,12 @@ int main(int, char *argv[]) {
   auto toml = toml::parse(argv[1]);
   SearchParams params = SearchParams::FromToml(toml);
 
+  if (params.maxStationaryTime != -1 &&
+      (unsigned)params.maxStationaryTime > maxStationaryGens) {
+    std::cout << "`max-stationary-time` is higher than allowed by the hardcoded value!" << std::endl;
+    exit(1);
+  }
+
   std::vector<Configuration> allSolutions;
 
   std::vector<CatalystData> catalystdata;
