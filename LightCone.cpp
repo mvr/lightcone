@@ -468,8 +468,8 @@ struct Lookahead {
         catalystHasInteracted{}, recoveredTime{0} {}
 
   void Step(const Configuration &config);
-  Problem Problem(const SearchParams &params, const SearchData &data,
-                  const Configuration &config) const;
+  Problem CurrentProblem(const SearchParams &params, const SearchData &data,
+                         const Configuration &config) const;
 
   std::pair<LifeState, bool> BloomKey(const Configuration &config) const;
 };
@@ -518,7 +518,7 @@ std::pair<LifeState, bool> Lookahead::BloomKey(const Configuration &config) cons
   return {toHash, valid};
 }
 
-Problem Lookahead::Problem(const SearchParams &params, const SearchData &data,
+Problem Lookahead::CurrentProblem(const SearchParams &params, const SearchData &data,
                            const Configuration &config) const {
   {
     LifeState requiredViolations = config.required & (state ^ config.catalysts);
@@ -691,7 +691,7 @@ Problem DetermineProblem(const SearchParams &params, const SearchData &data,
 
     if constexpr (debug) std::cout << "Lookahead to " << lookahead.state << std::endl;
 
-    Problem problem = lookahead.Problem(params, data, config);
+    Problem problem = lookahead.CurrentProblem(params, data, config);
 
     if (problem.type != ProblemType::NONE)
       return problem;
@@ -747,7 +747,7 @@ PlacementValidity TestPlacement(const SearchData &data, SearchNode &search,
 
   LifeState centered = state.Moved(-p.pos.first, -p.pos.second);
 
-  if (catalyst.approaches.size() > 0) {
+  if (catalyst.approaches.size() > 0) [[likely]] {
     bool anyValid = false;
     bool anyValidAtContact = false;
     for (auto &approach : catalyst.approaches) {
@@ -769,10 +769,10 @@ PlacementValidity TestPlacement(const SearchData &data, SearchNode &search,
       }
     }
 
-    if (!anyValid && anyValidAtContact)
-      return PlacementValidity::FAILED_ELSEWHERE;
     if (!anyValid && !anyValidAtContact)
       return PlacementValidity::FAILED_CONTACT;
+    if (!anyValid && anyValidAtContact)
+      return PlacementValidity::FAILED_ELSEWHERE;
   }
 
   // TODO: should probably check M too...
@@ -794,8 +794,13 @@ PlacementValidity TestPlacement(const SearchData &data, SearchNode &search,
   LifeState immediatebirths = (catalyst.history1 & currentCount2.Moved(-p.pos.first, -p.pos.second)) |
                               (catalyst.history2 & currentCount1.Moved(-p.pos.first, -p.pos.second));
   immediatebirths &= (catalyst.required & ~catalyst.state);
-  if (!immediatebirths.IsEmpty())
-    return PlacementValidity::FAILED_ELSEWHERE;
+  if (!immediatebirths.IsEmpty()) {
+    if ((originMask & immediatebirths).IsEmpty()) {
+      return PlacementValidity::FAILED_ELSEWHERE;
+    } else {
+      return PlacementValidity::FAILED_CONTACT;
+    }
+  }
 
   // Check the forbidden approaches
   for (auto &f : catalyst.forbidden) {
@@ -805,6 +810,7 @@ PlacementValidity TestPlacement(const SearchData &data, SearchNode &search,
       return PlacementValidity::FAILED_ELSEWHERE;
   }
 
+  // Check whether the catalyst explodes very quickly
   if constexpr (placementRequiredLookahead > 0) {
     LifeState lookahead = centered | catalyst.state;
     lookahead.Step(placementRequiredLookahead);
@@ -833,6 +839,7 @@ std::vector<Placement> CollectPlacements(const SearchParams &params,
   if constexpr (debug) std::cout << "history2: " << currentHistory2 << std::endl;
   if constexpr (debug) std::cout << "historyM: " << currentHistoryM << std::endl;
 
+  // TODO: this will exclude some transparent placements, no?
   LifeState somePlaceable = LifeState();
   for (unsigned i = 0; i < data.catalysts.size(); i++) {
     const CatalystData &catalyst = data.catalysts[i];
@@ -1092,7 +1099,7 @@ void RunSearch(const SearchParams &params, const SearchData &data,
     if (search.constraints[placement.catalystIx].tried.Get(placement.pos))
       continue;
 
-    // Placements must be in generation order for this to make sense!
+    // Placements in the list must be in generation order for this to make sense!
     while (nextPlacementLookahead.gen < placement.gen) {
       LifeState currentCount1(UNINITIALIZED), currentCount2(UNINITIALIZED),
         currentCountM(UNINITIALIZED);
@@ -1268,6 +1275,7 @@ int main(int, char *argv[]) {
   for (auto &c : catalystdata) {
     contactRadius = std::max(contactRadius, c.ContactRadius());
   }
+  if constexpr (debug) std::cout << "Contact radius: " << contactRadius << std::endl;
 
   std::vector<LifeState> masks = CalculateCollisionMasks(catalystdata);
 
@@ -1329,18 +1337,18 @@ int main(int, char *argv[]) {
 // TODO: I have probably killed performance with a lot of these
 // changes... need to do some profiling
 
-// TODO: It might be possible to check the `Contains` in
-// `Lookahead::Step` more efficiently. Currently it does a full-board
-// calculation for each placed catalyst, but most catalysts spend most
-// of their time recovered. How about it instead looks at the active
-// cells within the ZOI of a catalyst, and then iterates through those
-// active cells and sees which catalyst they correspond to.
+// TODO: Check the `Contains` in `Lookahead::Step` more efficiently.
+// Currently it does a full-board calculation for each placed
+// catalyst, but most catalysts spend most of their time recovered.
+// How about it instead looks at the active cells within the ZOI of a
+// catalyst, and then iterates through those active cells and sees
+// which catalyst they correspond to.
 
-// TODO: Output when there is a chain of placements that are in
+// TODO: Identify when there is a chain of placements that are in
 // reverse generation order. How often does that kind of cascade
 // actually happen?
 
-// TODO: should transparent catalysts be split into many copies,
+// TODO: Should transparent catalysts be split into many copies,
 // differing in which cell gets hit first? This might streamline some
 // of their handling, but we would have to be more careful about
 // avoiding identical placements coming from different copies.
@@ -1353,7 +1361,7 @@ int main(int, char *argv[]) {
 // worth it
 
 // TODO: There are some very small `LifeState`s that could be
-// stored/queried more efficiently by just storing the cell
+// stored/queried more efficiently by just storing a list of cell
 // coordinates
 
 // TODO: Allow non-transparent catalysts that don't supply an approach
@@ -1369,12 +1377,15 @@ int main(int, char *argv[]) {
 // dense field of failing catalysts, all contained within the
 // lightcone of the original problem. We will need some strategy like
 // avoiding placements that are within the lightcone of known
-// problems.
+// problems. Or not considering a problem pressing if it swamped by an
+// earlier problem.
 
 // TODO: Another idea is to identify the problem with the fewest
 // remaining interaction points in its lightcone, and then try to
 // solve that one. Or could it be good enough to just identify when an
-// early problem has had all its interaction points run out?g
+// early problem has had all its interaction points run out? After we
+// have all the placements, we can identify whether the problem spots
+// are still influencable
 
 // TODO: Or maybe, we prefer problems that occur in the lightcone of
 // the previous problem.
@@ -1383,5 +1394,26 @@ int main(int, char *argv[]) {
 // some number of cells to be stationary, rather than forbidding them
 // all
 
-// TODO: Reordering the placements to put nearby ones closer together
-// might help the bloom filter out
+// TODO: Reordering placements to prefer nearby ones could help with
+// the quadratic explosion with large active region. Or not: it
+// doesn't help starting with later placement first, because those
+// placements may not exist when you place something earlier. But what
+// if we leverage `ResetPlacements` some more, and have later
+// placements knownUnplaceable until a lightcone reaches them? Seems
+// complicated
+
+// Another downside is not being able to advance the lookahead as
+// often. It might also help the bloom filter out?
+
+// TODO: It would be good if glider-eating reactions could be
+// forbidden, but only after their first occurrence along a ray. (So we
+// can still eat the glider, but not duplicate work with more distance
+// placements.)
+
+// DONE: We should have a `continue-after-success` option, I am
+// worried we are missing useful solutions by needing a high
+// `min-stable-time`. This would mean both reporting winner status and
+// the next problem in `DetermineProblem`
+
+// TODO: What if each subtree returns some information about the
+// problems that were encountered. Could that be useful?
