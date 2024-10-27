@@ -413,7 +413,6 @@ enum struct ProblemType {
   NO_REACTION,
   NOT_TRANSPARENT,
   STATIONARY,
-  BLOOM_SEEN,
 };
 
 std::ostream &operator<<(std::ostream &out, const ProblemType value) {
@@ -428,7 +427,6 @@ std::ostream &operator<<(std::ostream &out, const ProblemType value) {
     case ProblemType::NO_REACTION:     return "NO_REACTION";
     case ProblemType::NOT_TRANSPARENT: return "NOT_TRANSPARENT";
     case ProblemType::STATIONARY:      return "STATIONARY";
-    case ProblemType::BLOOM_SEEN:      return "BLOOM_SEEN";
     }
   }();
 }
@@ -447,6 +445,12 @@ std::ostream &operator<<(std::ostream &out, const Problem value) {
   return out << value.type << " on gen " << value.gen << " at ("
              << value.cell.first << ", " << value.cell.second << ")";
 }
+
+struct PlacementConstraints {
+  Problem problem;
+  unsigned bloomSeenGen;
+};
+
 
 // The state of a configuration after stepping
 struct Lookahead {
@@ -589,21 +593,6 @@ Problem Lookahead::CurrentProblem(const SearchParams &params, const SearchData &
     }
   }
 
-  if (params.useBloomFilter) {
-    auto [key, valid] = BloomKey(config);
-    if(valid) {
-      bool seen = data.bloom->Lookup(key);
-      if (seen) {
-        if constexpr (debug_bloom) {
-          if ((config.state & ~LifeState::ConstantParse(debug_bloom_pattern).Moved(-32,-32)).IsEmpty()) {
-            std::cout << "Key here! " << key << std::endl;
-          }
-        }
-        return {{-1, -1}, gen, ProblemType::BLOOM_SEEN};
-      }
-    }
-  }
-
   return {{-1, -1}, gen, ProblemType::NONE};
 }
 
@@ -620,7 +609,6 @@ LifeState Problem::LightCone(unsigned currentgen) const {
     return LifeState::NZOIAround(cell, std::abs((int)gen - (int)currentgen - 1));
   case ProblemType::WINNER:
   case ProblemType::NO_REACTION:
-  case ProblemType::BLOOM_SEEN:
     return ~LifeState();
   case ProblemType::NONE:
     __builtin_unreachable();
@@ -638,7 +626,6 @@ bool Problem::IsGlobal() const {
     return false;
   case ProblemType::WINNER:
   case ProblemType::NO_REACTION:
-  case ProblemType::BLOOM_SEEN:
   case ProblemType::NONE:
     return true;
   }
@@ -684,8 +671,10 @@ struct SearchNode {
   void Step(const SearchParams &params, const SearchData &data);
 };
 
-Problem DetermineProblem(const SearchParams &params, const SearchData &data,
-                         const Configuration &config, SearchNode &search, Lookahead &lookahead) {
+PlacementConstraints DetermineProblem(const SearchParams &params, const SearchData &data,
+                                      const Configuration &config, SearchNode &search, Lookahead &lookahead) {
+  unsigned bloomSeenGen = std::numeric_limits<unsigned>::max();
+
   while (true) {
     lookahead.Step(config);
 
@@ -694,19 +683,31 @@ Problem DetermineProblem(const SearchParams &params, const SearchData &data,
     Problem problem = lookahead.CurrentProblem(params, data, config);
 
     if (problem.type != ProblemType::NONE)
-      return problem;
+      return PlacementConstraints(problem, bloomSeenGen);
 
-    if (params.useBloomFilter) {
+    if (params.useBloomFilter && bloomSeenGen == std::numeric_limits<unsigned>::max()) {
       auto [key, valid] = lookahead.BloomKey(config);
 
-      if constexpr (debug_bloom) {
-        if (key == LifeState::ConstantParse(debug_bloom_key).Moved(-32, -32)) {
-          std::cout << "Inserted here! " << config.state << std::endl;
+      if(valid) {
+        bool seen = data.bloom->Lookup(key);
+        if (seen) {
+          if constexpr (debug_bloom) {
+            if ((config.state & ~LifeState::ConstantParse(debug_bloom_pattern).Moved(-32,-32)).IsEmpty()) {
+              std::cout << "Key here! " << key << std::endl;
+            }
+          }
+
+          bloomSeenGen = lookahead.gen;
+        } else {
+          if constexpr (debug_bloom) {
+            if (key == LifeState::ConstantParse(debug_bloom_key).Moved(-32, -32)) {
+              std::cout << "Inserted here! " << config.state << std::endl;
+            }
+          }
+
+          data.bloom->Insert(key);
         }
       }
-
-      if(valid)
-        data.bloom->Insert(key);
     }
   }
 }
@@ -824,7 +825,7 @@ PlacementValidity TestPlacement(const SearchData &data, SearchNode &search,
 // This function is now too spaghetti
 std::vector<Placement> CollectPlacements(const SearchParams &params,
                                          const SearchData &data,
-                                         SearchNode &search, Problem &problem) {
+                                         SearchNode &search, PlacementConstraints &constraint) {
   if constexpr (debug) std::cout << "Starting CollectPlacements" << std::endl;
 
   std::vector<Placement> result;
@@ -848,14 +849,16 @@ std::vector<Placement> CollectPlacements(const SearchParams &params,
 
   somePlaceable &= ~(search.history1 & search.history2 & search.historyM);
 
-  for (unsigned gen = search.lookahead.gen; gen < problem.gen; gen++) {
+  unsigned lastPlacementGen = std::min(constraint.bloomSeenGen, constraint.problem.gen);
+
+  for (unsigned gen = search.lookahead.gen; gen < lastPlacementGen; gen++) {
     if constexpr (debug) std::cout << "Gen " << gen << " state: " << current << std::endl;
 
     if (search.lookahead.hasInteracted && gen > search.lookahead.startTime + params.maxActiveWindowGens)
       break;
 
-    LifeState lightcone = problem.LightCone(gen);
-    LifeState lightconeMargin = problem.LightCone(gen - data.contactRadius);
+    LifeState lightcone = constraint.problem.LightCone(gen);
+    LifeState lightconeMargin = constraint.problem.LightCone(gen - data.contactRadius);
     LifeState possiblePlacements = somePlaceable & lightconeMargin;
 
     if (possiblePlacements.IsEmpty())
@@ -1025,7 +1028,7 @@ void MakePlacement(const SearchParams &params, const SearchData &data,
 }
 
 void RunSearch(const SearchParams &params, const SearchData &data,
-               SearchNode &search, Problem problem) {
+               SearchNode &search, PlacementConstraints constraint) {
   if constexpr (debug) std::cout << "Starting node: " << search.config.state << std::endl;
 
   if constexpr (print_progress) {
@@ -1034,8 +1037,8 @@ void RunSearch(const SearchParams &params, const SearchData &data,
     if (counter == print_progress_frequency) [[unlikely]] {
       std::cout << "Current configuration: " << search.config.state << std::endl;
       LifeState problemGen = search.lookahead.state;
-      problemGen.Step(problem.gen - search.lookahead.gen);
-      std::cout << "Current problem: " << problem << std::endl;
+      problemGen.Step(constraint.problem.gen - search.lookahead.gen);
+      std::cout << "Current problem: " << constraint.problem << std::endl;
       // if(problem.cell.first != -1)
       //   std::cout << LifeHistoryState(problemGen, LifeState(), LifeState::Cell(problem.cell)) << std::endl;
       if(params.useBloomFilter) {
@@ -1056,19 +1059,19 @@ void RunSearch(const SearchParams &params, const SearchData &data,
   }
 
   if constexpr (debug) {
-    std::cout << "Problem: " << problem << std::endl;
-    if (problem.cell.first != -1) {
+    std::cout << "Problem: " << constraint.problem << std::endl;
+    if (constraint.problem.cell.first != -1) {
       LifeState problemGen = search.lookahead.state;
-      problemGen.Step(problem.gen - search.lookahead.gen);
-      std::cout << LifeHistoryState(problemGen, LifeState(), LifeState::Cell(problem.cell)) << std::endl;
+      problemGen.Step(constraint.problem.gen - search.lookahead.gen);
+      std::cout << LifeHistoryState(problemGen, LifeState(), LifeState::Cell(constraint.problem.cell)) << std::endl;
     }
   }
 
-  if (problem.type == ProblemType::TOO_LONG) {
+  if (constraint.problem.type == ProblemType::TOO_LONG) {
     std::cout << "Too long: " << search.config.state << std::endl;
   }
 
-  if (problem.type == ProblemType::WINNER) {
+  if (constraint.problem.type == ProblemType::WINNER) {
     std::cout << "Winner: " << search.config.state << std::endl;
     data.allSolutions->push_back(search.config);
     if constexpr (debug) {
@@ -1083,12 +1086,12 @@ void RunSearch(const SearchParams &params, const SearchData &data,
     return;
 
   std::vector<Placement> placements =
-      CollectPlacements(params, data, search, problem);
+      CollectPlacements(params, data, search, constraint);
 
   std::vector<SearchNode> subsearches;
   subsearches.reserve(placements.size());
 
-  std::vector<Problem> problems;
+  std::vector<PlacementConstraints> problems;
   problems.reserve(placements.size());
 
   Lookahead nextPlacementLookahead = search.lookahead;
@@ -1122,7 +1125,7 @@ void RunSearch(const SearchParams &params, const SearchData &data,
       nextPlacementLookahead.Step(search.config);
 
       if (advanceable) {
-        LifeState missed = (search.lookahead.state ^ search.config.catalysts).ZOI() & ~problem.LightCone(search.lookahead.gen);
+        LifeState missed = (search.lookahead.state ^ search.config.catalysts).ZOI() & ~constraint.problem.LightCone(search.lookahead.gen);
 
         if (!missed.IsEmpty()) {
           advanceable = false;
@@ -1290,7 +1293,7 @@ int main(int, char *argv[]) {
   search.BlockEarlyInteractions(params, data);
 
   Lookahead lookahead = search.lookahead;
-  Problem problem = DetermineProblem(params, data, search.config, search, lookahead);
+  PlacementConstraints problem = DetermineProblem(params, data, search.config, search, lookahead);
 
   RunSearch(params, data, search, problem);
 
