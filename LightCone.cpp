@@ -448,6 +448,7 @@ struct LookaheadOutcome {
   Problem problem;
   unsigned bloomSeenGen;
   unsigned timeoutGen;
+  unsigned winnerGen;
   bool winner;
 };
 
@@ -666,6 +667,7 @@ LookaheadOutcome DetermineProblem(const SearchParams &params, const SearchData &
                                       const Configuration &config, SearchNode &search, Lookahead &lookahead) {
   unsigned bloomSeenGen = std::numeric_limits<unsigned>::max();
   unsigned timeoutGen   = std::numeric_limits<unsigned>::max();
+  unsigned winnerGen = std::numeric_limits<unsigned>::max();
   bool winner = false;
 
   while (true) {
@@ -677,6 +679,7 @@ LookaheadOutcome DetermineProblem(const SearchParams &params, const SearchData &
 
     if (lookahead.gen > params.minFirstActiveGen && lookahead.hasInteracted &&
         lookahead.recoveredTime >= params.minStableTime) {
+      winnerGen = lookahead.gen;
       winner = true;
     }
 
@@ -688,7 +691,7 @@ LookaheadOutcome DetermineProblem(const SearchParams &params, const SearchData &
                         (lookahead.hasInteracted && lookahead.recoveredTime > params.maxStableTime);
 
     if (shouldReturn)
-      return LookaheadOutcome(problem, bloomSeenGen, timeoutGen, winner);
+      return LookaheadOutcome(problem, bloomSeenGen, timeoutGen, winnerGen, winner);
 
     if (params.useBloomFilter && bloomSeenGen == std::numeric_limits<unsigned>::max()) {
       auto [key, valid] = lookahead.BloomKey(config);
@@ -1076,7 +1079,7 @@ void RunSearch(const SearchParams &params, const SearchData &data,
     std::cout << "Too long: " << search.config.state << std::endl;
   }
 
-  if (constraint.winner) {
+  if (constraint.winner && constraint.winnerGen <= constraint.bloomSeenGen) {
     std::cout << "Winner: " << search.config.state << std::endl;
     data.allSolutions->push_back(search.config);
     if constexpr (debug) {
