@@ -680,12 +680,12 @@ LookaheadOutcome DetermineProblem(const SearchParams &params, const SearchData &
       winner = true;
     }
 
-    if (lookahead.recoveredTime > params.maxStableTime)
+    if (lookahead.hasInteracted && lookahead.recoveredTime > params.maxStableTime)
       timeoutGen = lookahead.gen;
 
     bool shouldReturn = problem.type != ProblemType::NONE ||
                         (!params.continueAfterSuccess && winner) ||
-                        (lookahead.recoveredTime > params.maxStableTime);
+                        (lookahead.hasInteracted && lookahead.recoveredTime > params.maxStableTime);
 
     if (shouldReturn)
       return LookaheadOutcome(problem, bloomSeenGen, timeoutGen, winner);
