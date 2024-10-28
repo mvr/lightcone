@@ -405,7 +405,6 @@ struct SearchData {
 
 enum struct ProblemType {
   NONE,
-  WINNER,
   REQUIRED,
   FILTER,
   UNRECOVERED,
@@ -419,7 +418,6 @@ std::ostream &operator<<(std::ostream &out, const ProblemType value) {
   return out << [value]() {
     switch (value) {
     case ProblemType::NONE:            return "NONE";
-    case ProblemType::WINNER:          return "WINNER";
     case ProblemType::REQUIRED:        return "REQUIRED";
     case ProblemType::FILTER:          return "FILTER";
     case ProblemType::UNRECOVERED:     return "UNRECOVERED";
@@ -446,9 +444,11 @@ std::ostream &operator<<(std::ostream &out, const Problem value) {
              << value.cell.first << ", " << value.cell.second << ")";
 }
 
-struct PlacementConstraints {
+struct LookaheadOutcome {
   Problem problem;
   unsigned bloomSeenGen;
+  unsigned timeoutGen;
+  bool winner;
 };
 
 
@@ -586,13 +586,6 @@ Problem Lookahead::CurrentProblem(const SearchParams &params, const SearchData &
       return {cell, gen, ProblemType::TOO_LONG};
   }
 
-  {
-    if (gen > params.minFirstActiveGen && hasInteracted &&
-        recoveredTime > params.minStableTime) {
-      return {{-1, -1}, gen, ProblemType::WINNER};
-    }
-  }
-
   return {{-1, -1}, gen, ProblemType::NONE};
 }
 
@@ -607,7 +600,6 @@ LifeState Problem::LightCone(unsigned currentgen) const {
   case ProblemType::STATIONARY:
   case ProblemType::TOO_LONG:
     return LifeState::NZOIAround(cell, std::abs((int)gen - (int)currentgen - 1));
-  case ProblemType::WINNER:
   case ProblemType::NO_REACTION:
     return ~LifeState();
   case ProblemType::NONE:
@@ -624,7 +616,6 @@ bool Problem::IsGlobal() const {
   case ProblemType::STATIONARY:
   case ProblemType::TOO_LONG:
     return false;
-  case ProblemType::WINNER:
   case ProblemType::NO_REACTION:
   case ProblemType::NONE:
     return true;
@@ -671,9 +662,11 @@ struct SearchNode {
   void Step(const SearchParams &params, const SearchData &data);
 };
 
-PlacementConstraints DetermineProblem(const SearchParams &params, const SearchData &data,
+LookaheadOutcome DetermineProblem(const SearchParams &params, const SearchData &data,
                                       const Configuration &config, SearchNode &search, Lookahead &lookahead) {
   unsigned bloomSeenGen = std::numeric_limits<unsigned>::max();
+  unsigned timeoutGen   = std::numeric_limits<unsigned>::max();
+  bool winner = false;
 
   while (true) {
     lookahead.Step(config);
@@ -682,8 +675,20 @@ PlacementConstraints DetermineProblem(const SearchParams &params, const SearchDa
 
     Problem problem = lookahead.CurrentProblem(params, data, config);
 
-    if (problem.type != ProblemType::NONE)
-      return PlacementConstraints(problem, bloomSeenGen);
+    if (lookahead.gen > params.minFirstActiveGen && lookahead.hasInteracted &&
+        lookahead.recoveredTime >= params.minStableTime) {
+      winner = true;
+    }
+
+    if (lookahead.recoveredTime > params.maxStableTime)
+      timeoutGen = lookahead.gen;
+
+    bool shouldReturn = problem.type != ProblemType::NONE ||
+                        (!params.continueAfterSuccess && winner) ||
+                        (lookahead.recoveredTime > params.maxStableTime);
+
+    if (shouldReturn)
+      return LookaheadOutcome(problem, bloomSeenGen, timeoutGen, winner);
 
     if (params.useBloomFilter && bloomSeenGen == std::numeric_limits<unsigned>::max()) {
       auto [key, valid] = lookahead.BloomKey(config);
@@ -825,7 +830,7 @@ PlacementValidity TestPlacement(const SearchData &data, SearchNode &search,
 // This function is now too spaghetti
 std::vector<Placement> CollectPlacements(const SearchParams &params,
                                          const SearchData &data,
-                                         SearchNode &search, PlacementConstraints &constraint) {
+                                         SearchNode &search, LookaheadOutcome &constraint) {
   if constexpr (debug) std::cout << "Starting CollectPlacements" << std::endl;
 
   std::vector<Placement> result;
@@ -849,7 +854,7 @@ std::vector<Placement> CollectPlacements(const SearchParams &params,
 
   somePlaceable &= ~(search.history1 & search.history2 & search.historyM);
 
-  unsigned lastPlacementGen = std::min(constraint.bloomSeenGen, constraint.problem.gen);
+  unsigned lastPlacementGen = std::min(std::min(constraint.bloomSeenGen, constraint.timeoutGen), constraint.problem.gen);
 
   for (unsigned gen = search.lookahead.gen; gen < lastPlacementGen; gen++) {
     if constexpr (debug) std::cout << "Gen " << gen << " state: " << current << std::endl;
@@ -1028,7 +1033,7 @@ void MakePlacement(const SearchParams &params, const SearchData &data,
 }
 
 void RunSearch(const SearchParams &params, const SearchData &data,
-               SearchNode &search, PlacementConstraints constraint) {
+               SearchNode &search, LookaheadOutcome constraint) {
   if constexpr (debug) std::cout << "Starting node: " << search.config.state << std::endl;
 
   if constexpr (print_progress) {
@@ -1071,7 +1076,7 @@ void RunSearch(const SearchParams &params, const SearchData &data,
     std::cout << "Too long: " << search.config.state << std::endl;
   }
 
-  if (constraint.problem.type == ProblemType::WINNER) {
+  if (constraint.winner) {
     std::cout << "Winner: " << search.config.state << std::endl;
     data.allSolutions->push_back(search.config);
     if constexpr (debug) {
@@ -1080,6 +1085,8 @@ void RunSearch(const SearchParams &params, const SearchData &data,
         std::cout << "Placement: " << p.catalystIx << " at (" << p.pos.first << ", " << p.pos.second << ")" << std::endl;
       }
     }
+    if (!params.continueAfterSuccess)
+      return;
   }
 
   if (search.config.numCatalysts == params.maxCatalysts)
@@ -1091,7 +1098,7 @@ void RunSearch(const SearchParams &params, const SearchData &data,
   std::vector<SearchNode> subsearches;
   subsearches.reserve(placements.size());
 
-  std::vector<PlacementConstraints> problems;
+  std::vector<LookaheadOutcome> problems;
   problems.reserve(placements.size());
 
   Lookahead nextPlacementLookahead = search.lookahead;
@@ -1293,7 +1300,7 @@ int main(int, char *argv[]) {
   search.BlockEarlyInteractions(params, data);
 
   Lookahead lookahead = search.lookahead;
-  PlacementConstraints problem = DetermineProblem(params, data, search.config, search, lookahead);
+  LookaheadOutcome problem = DetermineProblem(params, data, search.config, search, lookahead);
 
   RunSearch(params, data, search, problem);
 
