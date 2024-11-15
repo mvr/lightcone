@@ -392,7 +392,27 @@ struct Configuration {
   Configuration()
       : state{}, catalysts{}, required{}, numCatalysts{0}, numTransparent{0},
         lastInteraction{0}, placements{}, targets{}, transparent{} {}
+
+  void MakePlacement(const SearchParams &params, const CatalystData &catalyst,
+                     const Placement &placement);
 };
+
+void Configuration::MakePlacement(const SearchParams &params, const CatalystData &catalyst,
+                   const Placement &placement) {
+  const LifeState catalystState = catalyst.state.Moved(placement.pos);
+
+  numCatalysts++;
+  if(catalyst.transparent) numTransparent++;
+  lastInteraction = std::max(lastInteraction, placement.gen);
+  state |= catalystState;
+  catalysts |= catalystState;
+  required |= catalyst.required.Moved(placement.pos);
+  placements.push_back(placement);
+  targets.push_back(
+      LifeTarget(catalyst.state.Moved(placement.pos),
+                 catalyst.halo.Moved(placement.pos)));
+  transparent.push_back(catalyst.transparent);
+}
 
 // Any precomputed data, constant at every node
 struct SearchData {
@@ -472,12 +492,22 @@ struct Lookahead {
       : state{}, everActive{}, gen{0}, hasInteracted{false}, missingTime{},
         catalystHasInteracted{}, recoveredTime{0} {}
 
+  void MakePlacement(const SearchParams &params, const CatalystData &catalyst,
+                     const Placement &placement);
+  
   void Step(const Configuration &config);
   Problem CurrentProblem(const SearchParams &params, const SearchData &data,
                          const Configuration &config) const;
 
   std::pair<LifeState, bool> BloomKey(const Configuration &config) const;
 };
+
+void Lookahead::MakePlacement(const SearchParams &params, const CatalystData &catalyst,
+                              const Placement &placement) {
+  state |= catalyst.state.Moved(placement.pos);
+  missingTime.push_back(0);
+  catalystHasInteracted.push_back(false);
+}
 
 void Lookahead::Step(const Configuration &config) {
   state.Step();
@@ -664,9 +694,9 @@ struct SearchNode {
 };
 
 LookaheadOutcome DetermineProblem(const SearchParams &params, const SearchData &data,
-                                      const Configuration &config, SearchNode &search, Lookahead &lookahead) {
+                                  const Configuration &config, Lookahead &lookahead) {
   unsigned bloomSeenGen = std::numeric_limits<unsigned>::max();
-  unsigned timeoutGen   = std::numeric_limits<unsigned>::max();
+  unsigned timeoutGen = std::numeric_limits<unsigned>::max();
   unsigned winnerGen = std::numeric_limits<unsigned>::max();
   bool winner = false;
 
@@ -1006,23 +1036,8 @@ void MakePlacement(const SearchParams &params, const SearchData &data,
                    SearchNode &search, const Placement &placement) {
   const CatalystData &catalyst = data.catalysts[placement.catalystIx];
 
-  const LifeState catalystState = catalyst.state.Moved(placement.pos);
-
-  search.config.numCatalysts++;
-  if(catalyst.transparent) search.config.numTransparent++;
-  search.config.lastInteraction = std::max(search.config.lastInteraction, placement.gen);
-  search.config.state |= catalystState;
-  search.config.catalysts |= catalystState;
-  search.config.required |= catalyst.required.Moved(placement.pos);
-  search.config.placements.push_back(placement);
-  search.config.targets.push_back(
-      LifeTarget(catalyst.state.Moved(placement.pos),
-                 catalyst.halo.Moved(placement.pos)));
-  search.config.transparent.push_back(catalyst.transparent);
-
-  search.lookahead.state |= catalystState;
-  search.lookahead.missingTime.push_back(0);
-  search.lookahead.catalystHasInteracted.push_back(false);
+  search.config.MakePlacement(params, catalyst, placement);
+  search.lookahead.MakePlacement(params, catalyst, placement);
 
   search.history1 |= catalyst.history1.Moved(placement.pos);
   search.history2 |= catalyst.history2.Moved(placement.pos);
@@ -1098,24 +1113,45 @@ void RunSearch(const SearchParams &params, const SearchData &data,
   std::vector<Placement> placements =
       CollectPlacements(params, data, search, constraint);
 
-  std::vector<SearchNode> subsearches;
-  subsearches.reserve(placements.size());
-
   std::vector<LookaheadOutcome> problems;
   problems.reserve(placements.size());
 
   Lookahead nextPlacementLookahead = search.lookahead;
-  LifeState safeContacts1, safeContacts2, safeContactsM;
-  bool advanceable = true;
 
-  for (auto &placement : placements) {
-    if (search.constraints[placement.catalystIx].tried.Get(placement.pos))
-      continue;
-
+  for (const auto &placement : placements) {
     // Placements in the list must be in generation order for this to make sense!
     while (nextPlacementLookahead.gen < placement.gen) {
       LifeState currentCount1(UNINITIALIZED), currentCount2(UNINITIALIZED),
         currentCountM(UNINITIALIZED);
+      nextPlacementLookahead.state.InteractionCounts(currentCount1, currentCount2, currentCountM);
+      nextPlacementLookahead.Step(search.config);
+    }
+
+    const CatalystData &catalyst = data.catalysts[placement.catalystIx];
+    
+    Configuration newConfig = search.config;
+    newConfig.MakePlacement(params, catalyst, placement);
+
+    Lookahead newLookahead = nextPlacementLookahead;
+    newLookahead.MakePlacement(params, catalyst, placement);
+
+    problems.push_back(DetermineProblem(params, data, newConfig, newLookahead));
+  }
+
+  bool advanceable = true;
+  nextPlacementLookahead = search.lookahead;  
+  LifeState safeContacts1, safeContacts2, safeContactsM;
+
+  unsigned placementIx = 0;
+  for (const auto &placement : placements) {
+    if (search.constraints[placement.catalystIx].tried.Get(placement.pos))
+      continue;
+    search.constraints[placement.catalystIx].tried.Set(placement.pos);
+    
+    // Placements in the list must be in generation order for this to make sense!
+    while (nextPlacementLookahead.gen < placement.gen) {
+      LifeState currentCount1(UNINITIALIZED), currentCount2(UNINITIALIZED),
+          currentCountM(UNINITIALIZED);
       nextPlacementLookahead.state.InteractionCounts(currentCount1, currentCount2, currentCountM);
 
       if (search.config.numCatalysts > 0) {
@@ -1149,10 +1185,7 @@ void RunSearch(const SearchParams &params, const SearchData &data,
       }
     }
 
-    search.constraints[placement.catalystIx].tried.Set(placement.pos);
-
-    subsearches.push_back(search);
-    SearchNode &newSearch = subsearches.back();
+    SearchNode newSearch = search;
 
     MakePlacement(params, data, newSearch, placement);
 
@@ -1176,24 +1209,17 @@ void RunSearch(const SearchParams &params, const SearchData &data,
       }
     }
 
-    Lookahead placed = nextPlacementLookahead;
-    placed.state |= data.catalysts[placement.catalystIx].state.Moved(placement.pos);
-    placed.missingTime.push_back(0);
-    placed.catalystHasInteracted.push_back(false);
-
-    problems.push_back(DetermineProblem(params, data, newSearch.config, newSearch, placed));
-  }
-
-  for (unsigned i = 0; i < subsearches.size(); i++) {
     if constexpr (debug) {
-      if (params.hasOracle && !(subsearches[i].config.state & ~params.oracle).IsEmpty()) {
-        std::cout << "Oracle failed: " << subsearches[i].config.state << std::endl;
+      if (params.hasOracle && !(newSearch.config.state & ~params.oracle).IsEmpty()) {
+        std::cout << "Oracle failed: " << newSearch.config.state << std::endl;
         continue;
       }
     }
-    if constexpr (debug) std::cout << "Branching node: " << subsearches[i].config.placements.back() << std::endl;
+    if constexpr (debug) std::cout << "Branching node: " << newSearch.config.placements.back() << std::endl;
 
-    RunSearch(params, data, subsearches[i], problems[i]);
+    RunSearch(params, data, newSearch, problems[placementIx]);
+
+    placementIx++;
   }
 }
 
@@ -1303,7 +1329,7 @@ int main(int, char *argv[]) {
   search.BlockEarlyInteractions(params, data);
 
   Lookahead lookahead = search.lookahead;
-  LookaheadOutcome problem = DetermineProblem(params, data, search.config, search, lookahead);
+  LookaheadOutcome problem = DetermineProblem(params, data, search.config, lookahead);
 
   RunSearch(params, data, search, problem);
 
