@@ -97,6 +97,9 @@ struct SearchParams {
   unsigned maxStationaryTime;
   unsigned maxStationaryCount;
 
+  bool continueAfterSuccess;
+  unsigned maxStableTime;
+
   bool useBloomFilter;
 
   bool hasFilter;
@@ -125,6 +128,8 @@ SearchParams SearchParams::FromToml(toml::value &toml) {
   params.maxCatalysts = toml::find_or(toml, "max-catalysts", 100);
   params.maxTransparent = toml::find_or(toml, "max-transparent", 0);
   params.minStableTime = toml::find_or(toml, "min-stable-time", 8);
+  params.continueAfterSuccess = toml::find_or(toml, "continue-after-success", true);
+  params.maxStableTime = toml::find_or(toml, "max-stable-time", std::max(params.minStableTime, (unsigned)64));
 
   std::vector<int> firstRange =
       toml::find_or<std::vector<int>>(toml, "first-active-range", {0, 100});
