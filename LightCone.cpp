@@ -121,7 +121,6 @@ struct CatalystData {
 };
 
 CatalystData CatalystData::FromParamsNormal(CatalystParams &params) {
-  // LifeHistoryState &approach = params.approaches[0];
   for (auto &approach : params.approaches) {
     approach.AlignWith(params.state);
   }
@@ -133,7 +132,7 @@ CatalystData CatalystData::FromParamsNormal(CatalystParams &params) {
     reactionWithCatalyst &= ~params.state;
 
     LifeState reactionWithoutCatalyst =
-        approach.state & approach.marked;
+      approach.state & approach.marked;
     reactionWithoutCatalyst.Step();
 
     LifeState contact = reactionWithCatalyst ^ reactionWithoutCatalyst;
@@ -146,7 +145,7 @@ CatalystData CatalystData::FromParamsNormal(CatalystParams &params) {
   for (auto cell = tocheck.FirstOn(); cell != std::make_pair(-1, -1);
        tocheck.Erase(cell), cell = tocheck.FirstOn()) {
     unsigned count =
-        (params.approaches[0].state & ~params.state).CountNeighbours(cell);
+      (params.approaches[0].state & ~params.state).CountNeighbours(cell);
 
     bool allequal = std::all_of(
         params.approaches.begin(), params.approaches.end(),
@@ -177,8 +176,8 @@ CatalystData CatalystData::FromParamsNormal(CatalystParams &params) {
 
   result.contactType =
     contactCount == 1
-      ? ContactType::CONTACT1
-      : (contactCount == 2 ? ContactType::CONTACT2 : ContactType::CONTACTM);
+    ? ContactType::CONTACT1
+    : (contactCount == 2 ? ContactType::CONTACT2 : ContactType::CONTACTM);
 
   result.state = params.state;
   result.halo = params.state.ZOI() & ~params.state;
@@ -881,7 +880,6 @@ std::vector<Placement> CollectPlacements(const SearchParams &params,
   // TODO: this will exclude some transparent placements, no?
   LifeState somePlaceable = LifeState();
   for (unsigned i = 0; i < data.catalysts.size(); i++) {
-    const CatalystData &catalyst = data.catalysts[i];
     somePlaceable |= ~(search.constraints[i].tried | search.constraints[i].knownUnplaceable);
   }
 
@@ -1296,7 +1294,7 @@ int main(int, char *argv[]) {
   auto toml = toml::parse(argv[1]);
   SearchParams params = SearchParams::FromToml(toml);
 
-  if (params.maxStationaryTime != -1 &&
+  if (params.maxStationaryTime != 0 &&
       (unsigned)params.maxStationaryTime > maxStationaryGens) {
     std::cout << "`max-stationary-time` is higher than allowed by the hardcoded value!" << std::endl;
     exit(1);
