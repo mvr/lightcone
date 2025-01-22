@@ -5,7 +5,7 @@
 #include "toml.hpp"
 
 #include "LifeAPI/LifeAPI.hpp"
-#include "LifeAPI/LifeHistoryState.hpp"
+#include "LifeAPI/LifeHistory.hpp"
 
 enum class FilterType { EXACT, EVER };
 
@@ -25,9 +25,9 @@ struct Forbidden {
 
 struct CatalystParams {
   LifeState state;
-  LifeHistoryState required;
-  std::vector<LifeHistoryState> approaches;
-  std::vector<LifeHistoryState> forbiddens;
+  LifeHistory required;
+  std::vector<LifeHistory> approaches;
+  std::vector<LifeHistory> forbiddens;
   std::vector<LifeState> soups;
 
   unsigned minRecoveryTime;
@@ -44,30 +44,41 @@ CatalystParams CatalystParams::FromToml(toml::value &toml) {
 
   bool transparent = toml::find_or(toml, "transparent", false);
 
-  LifeHistoryState required;
-  std::vector<LifeHistoryState> approaches;
+  LifeHistory required;
+  std::vector<LifeHistory> approaches;
 
   if (!transparent) {
     // Not required if the catalyst is transparent
     std::string requiredrle = toml::find<std::string>(toml, "required");
-    required = LifeHistoryState::Parse(requiredrle);
+    required = LifeHistory::Parse(requiredrle);
 
     if(toml.contains("approach")) {
       std::string rle = toml::find<std::string>(toml, "approach");
-      approaches.push_back(LifeHistoryState::Parse(rle));
+      approaches.push_back(LifeHistory::Parse(rle));
     }
     if(toml.contains("approaches")) {
       std::vector<std::string> approachrles = toml::find<std::vector<std::string>>(toml, "approaches");
       for (std::string &rle : approachrles)
-        approaches.push_back(LifeHistoryState::Parse(rle));
+        approaches.push_back(LifeHistory::Parse(rle));
     }
   }
 
-  std::vector<LifeHistoryState> forbiddens;
+  std::vector<LifeHistory> forbiddens;
   if (toml.contains("forbidden")) {
       std::vector<std::string> forbiddenrles = toml::find<std::vector<std::string>>(toml, "forbidden");
       for (std::string &rle : forbiddenrles)
-        forbiddens.push_back(LifeHistoryState::Parse(rle));
+        forbiddens.push_back(LifeHistory::Parse(rle));
+  }
+
+  std::vector<LifeState> soups;
+  if(toml.contains("soup")) {
+    std::string rle = toml::find<std::string>(toml, "soup");
+    soups.push_back(LifeState::Parse(rle));
+  }
+  if(toml.contains("soups")) {
+    std::vector<std::string> souprles = toml::find<std::vector<std::string>>(toml, "soups");
+    for (std::string &rle : souprles)
+      soups.push_back(LifeState::Parse(rle));
   }
 
   std::vector<int> recoveryRange =
@@ -75,14 +86,14 @@ CatalystParams CatalystParams::FromToml(toml::value &toml) {
   unsigned minRecoveryTime = recoveryRange[0];
   unsigned maxRecoveryTime = recoveryRange[1];
 
-  return {state, required, approaches, forbiddens, std::vector<LifeState>(),
+  return {state, required, approaches, forbiddens, soups,
       minRecoveryTime, maxRecoveryTime, transparent};
 }
 
 struct SearchParams {
   std::vector<CatalystParams> catalysts;
 
-  LifeHistoryState state;
+  LifeHistory state;
 
   unsigned maxCatalysts;
   unsigned maxTransparent;
@@ -123,7 +134,7 @@ SearchParams SearchParams::FromToml(toml::value &toml) {
   SearchParams params;
 
   std::string rle = toml::find<std::string>(toml, "pattern");
-  params.state = LifeHistoryState::Parse(rle);
+  params.state = LifeHistory::Parse(rle);
 
   params.maxCatalysts = toml::find_or(toml, "max-catalysts", 100);
   params.maxTransparent = toml::find_or(toml, "max-transparent", 0);
@@ -167,7 +178,7 @@ SearchParams SearchParams::FromToml(toml::value &toml) {
       std::string rle = toml::find_or<std::string>(f, "filter", "");
       std::vector<int> filterCenterVec =
           toml::find_or<std::vector<int>>(f, "filter-pos", {0, 0});
-      LifeHistoryState pat = LifeHistoryState::Parse(rle);
+      LifeHistory pat = LifeHistory::Parse(rle);
       unsigned filterGen = toml::find_or(f, "filter-gen", -1);
 
       FilterType filterType;
@@ -192,7 +203,7 @@ SearchParams SearchParams::FromToml(toml::value &toml) {
 
   if (toml.contains("oracle")) {
     std::string oraclerle = toml::find<std::string>(toml, "oracle");
-    LifeHistoryState oracle = LifeHistoryState::Parse(oraclerle);
+    LifeHistory oracle = LifeHistory::Parse(oraclerle);
 
     std::vector<int> oracleCenterVec = toml::find_or<std::vector<int>>(toml, "oracle-center", {0, 0});
     std::pair<int, int> oracleCenter = {-oracleCenterVec[0], -oracleCenterVec[1]};

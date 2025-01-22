@@ -1,6 +1,8 @@
+#include <iostream>
 #include <vector>
 
 #include "LifeAPI/LifeAPI.hpp"
+#include "LifeAPI/LifeTarget.hpp"
 #include "LifeAPI/Symmetry.hpp"
 
 #include "Bloom.hpp"
@@ -69,18 +71,14 @@ struct Approach {
     return ((signature ^ other) & signatureMask) == 0;
   }
 
-  static Approach FromParams(const LifeHistoryState &params);
+  static Approach FromParams(const LifeHistory &params);
 };
 
-Approach Approach::FromParams(const LifeHistoryState &params) {
+Approach Approach::FromParams(const LifeHistory &params) {
   LifeState catalyst = params.state & ~params.marked;
 
-  LifeState reactionWithCatalyst = params.state;
-  reactionWithCatalyst.Step();
-  reactionWithCatalyst &= ~catalyst;
-
-  LifeState reactionWithoutCatalyst = params.state & params.marked;
-  reactionWithoutCatalyst.Step();
+  // LifeState reactionWithCatalyst = params.state.Stepped() & ~catalyst;
+  // LifeState reactionWithoutCatalyst = (params.state & params.marked).Stepped();
 
   Approach result;
   result.approachOn = params.marked & params.state;
@@ -127,13 +125,11 @@ CatalystData CatalystData::FromParamsNormal(CatalystParams &params) {
 
   LifeState commonContact = ~LifeState();
   for(auto &approach : params.approaches) {
-    LifeState reactionWithCatalyst = approach.state;
-    reactionWithCatalyst.Step();
+    LifeState reactionWithCatalyst = approach.state.Stepped();
     reactionWithCatalyst &= ~params.state;
 
     LifeState reactionWithoutCatalyst =
-      approach.state & approach.marked;
-    reactionWithoutCatalyst.Step();
+      (approach.state & approach.marked).Stepped();
 
     LifeState contact = reactionWithCatalyst ^ reactionWithoutCatalyst;
     commonContact &= contact;
@@ -168,6 +164,9 @@ CatalystData CatalystData::FromParamsNormal(CatalystParams &params) {
   // This tramples the contents of `params`, seems bad
   for (auto &approach : params.approaches) {
     approach.Move(-contactOrigin.first, -contactOrigin.second);
+  }
+  for (auto &soup : params.soups) {
+    soup.Move(-contactOrigin.first, -contactOrigin.second);
   }
 
   params.required.AlignWith(params.state);
@@ -216,14 +215,14 @@ CatalystData CatalystData::FromParamsNormal(CatalystParams &params) {
   result.transparent = false;
 
   if constexpr (debug) {
-    std::cout << "Loaded catalyst: " << LifeHistoryState(result.state, LifeState(), LifeState::Cell({0, 0})) << std::endl;
-    std::cout << "Required: " << LifeHistoryState(result.state, LifeState(), result.required) << std::endl;
+    std::cout << "Loaded catalyst: " << LifeHistory(result.state, LifeState(), LifeState::Cell({0, 0})) << std::endl;
+    std::cout << "Required: " << LifeHistory(result.state, LifeState(), result.required) << std::endl;
     std::cout << "Contact Type: " << result.contactType << std::endl;
     // std::cout << "Params Approach: " << params.approach << std::endl;
     // std::cout << "Params Required: " << params.required << std::endl;
     for (auto &approach : result.approaches) {
-      std::cout << "Approach On: " << LifeHistoryState(result.state, LifeState(), approach.approachOn) << std::endl;
-      std::cout << "Approach Off: " << LifeHistoryState(result.state, LifeState(),approach.approachOff) << std::endl;
+      std::cout << "Approach On: " << LifeHistory(result.state, LifeState(), approach.approachOn) << std::endl;
+      std::cout << "Approach Off: " << LifeHistory(result.state, LifeState(),approach.approachOff) << std::endl;
     }
   }
 
@@ -900,8 +899,8 @@ std::vector<Placement> CollectPlacements(const SearchParams &params,
     if (possiblePlacements.IsEmpty())
       break;
 
-    LifeState currentCount1(UNINITIALIZED), currentCount2(UNINITIALIZED),
-        currentCountM(UNINITIALIZED);
+    LifeState currentCount1(InitializedTag::UNINITIALIZED), currentCount2(InitializedTag::UNINITIALIZED),
+        currentCountM(InitializedTag::UNINITIALIZED);
     current.InteractionCounts(currentCount1, currentCount2, currentCountM);
 
     LifeState newContactPoints = (currentCount1 & ~currentHistory1) |
@@ -978,7 +977,7 @@ std::vector<Placement> CollectPlacements(const SearchParams &params,
           if (catalyst.contactType != ContactType::TRANSPARENT)
             continue;
 
-          LifeState newContactPoints(UNINITIALIZED);
+          LifeState newContactPoints(InitializedTag::UNINITIALIZED);
 
           switch (contactType /* of the active region */) {
           case ContactType::CONTACT1:
@@ -1061,7 +1060,7 @@ void RunSearch(const SearchParams &params, const SearchData &data,
       problemGen.Step(constraint.problem.gen - search.lookahead.gen);
       std::cout << "Current problem: " << constraint.problem << std::endl;
       // if(problem.cell.first != -1)
-      //   std::cout << LifeHistoryState(problemGen, LifeState(), LifeState::Cell(problem.cell)) << std::endl;
+      //   std::cout << LifeHistory(problemGen, LifeState(), LifeState::Cell(problem.cell)) << std::endl;
       if(params.useBloomFilter) {
         std::cout << "Bloom filter population: " << data.bloom->items << std::endl;
         std::cout << "Bloom filter error rate: " << data.bloom->ApproximateErrorRate() << std::endl;
@@ -1084,7 +1083,7 @@ void RunSearch(const SearchParams &params, const SearchData &data,
     if (constraint.problem.cell.first != -1) {
       LifeState problemGen = search.lookahead.state;
       problemGen.Step(constraint.problem.gen - search.lookahead.gen);
-      std::cout << LifeHistoryState(problemGen, LifeState(), LifeState::Cell(constraint.problem.cell)) << std::endl;
+      std::cout << LifeHistory(problemGen, LifeState(), LifeState::Cell(constraint.problem.cell)) << std::endl;
     }
   }
 
@@ -1096,7 +1095,7 @@ void RunSearch(const SearchParams &params, const SearchData &data,
     std::cout << "Winner: " << search.config.state << std::endl;
     data.allSolutions->push_back(search.config);
     if constexpr (debug) {
-      std::cout << "Required: " << LifeHistoryState(search.config.state, LifeState(), search.config.required) << std::endl;
+      std::cout << "Required: " << LifeHistory(search.config.state, LifeState(), search.config.required) << std::endl;
       for (auto &p : search.config.placements) {
         std::cout << "Placement: " << p.catalystIx << " at (" << p.pos.first << ", " << p.pos.second << ")" << std::endl;
       }
@@ -1119,8 +1118,8 @@ void RunSearch(const SearchParams &params, const SearchData &data,
   for (const auto &placement : placements) {
     // Placements in the list must be in generation order for this to make sense!
     while (nextPlacementLookahead.gen < placement.gen) {
-      LifeState currentCount1(UNINITIALIZED), currentCount2(UNINITIALIZED),
-        currentCountM(UNINITIALIZED);
+      LifeState currentCount1(InitializedTag::UNINITIALIZED), currentCount2(InitializedTag::UNINITIALIZED),
+        currentCountM(InitializedTag::UNINITIALIZED);
       nextPlacementLookahead.state.InteractionCounts(currentCount1, currentCount2, currentCountM);
       nextPlacementLookahead.Step(search.config);
     }
@@ -1148,8 +1147,8 @@ void RunSearch(const SearchParams &params, const SearchData &data,
     
     // Placements in the list must be in generation order for this to make sense!
     while (nextPlacementLookahead.gen < placement.gen) {
-      LifeState currentCount1(UNINITIALIZED), currentCount2(UNINITIALIZED),
-          currentCountM(UNINITIALIZED);
+      LifeState currentCount1(InitializedTag::UNINITIALIZED), currentCount2(InitializedTag::UNINITIALIZED),
+          currentCountM(InitializedTag::UNINITIALIZED);
       nextPlacementLookahead.state.InteractionCounts(currentCount1, currentCount2, currentCountM);
 
       if (search.config.numCatalysts > 0) {
@@ -1246,8 +1245,8 @@ void SearchNode::BlockEarlyInteractions(const SearchParams &params,
   LifeState current = params.state.state;
   // Also block early interactions
   for (unsigned g = 0; g < params.minFirstActiveGen; g++) {
-    LifeState currentCount1(UNINITIALIZED), currentCount2(UNINITIALIZED),
-        currentCountM(UNINITIALIZED);
+    LifeState currentCount1(InitializedTag::UNINITIALIZED), currentCount2(InitializedTag::UNINITIALIZED),
+        currentCountM(InitializedTag::UNINITIALIZED);
     current.InteractionCounts(currentCount1, currentCount2, currentCountM);
     for (unsigned i = 0; i < data.catalysts.size(); i++) {
       const CatalystData &catalyst = data.catalysts[i];
