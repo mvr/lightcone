@@ -705,7 +705,8 @@ LookaheadOutcome DetermineProblem(const SearchParams &params, const SearchData &
 
     Problem problem = lookahead.CurrentProblem(params, data, config);
 
-    if (lookahead.gen > params.minFirstActiveGen && lookahead.hasInteracted &&
+    if (!winner &&
+        lookahead.gen > params.minFirstActiveGen && lookahead.hasInteracted &&
         lookahead.recoveredTime >= params.minStableTime) {
       winnerGen = lookahead.gen;
       winner = true;
