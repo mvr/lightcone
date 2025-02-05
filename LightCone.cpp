@@ -1142,8 +1142,10 @@ void RunSearch(const SearchParams &params, const SearchData &data,
 
   unsigned placementIx = 0;
   for (const auto &placement : placements) {
-    if (search.constraints[placement.catalystIx].tried.Get(placement.pos))
+    if (search.constraints[placement.catalystIx].tried.Get(placement.pos)) {
+      placementIx++;
       continue;
+    }
     search.constraints[placement.catalystIx].tried.Set(placement.pos);
     
     // Placements in the list must be in generation order for this to make sense!
@@ -1210,6 +1212,7 @@ void RunSearch(const SearchParams &params, const SearchData &data,
     if constexpr (debug) {
       if (params.hasOracle && !(newSearch.config.state & ~params.oracle).IsEmpty()) {
         std::cout << "Oracle failed: " << newSearch.config.state << std::endl;
+        placementIx++;
         continue;
       }
     }
