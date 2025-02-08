@@ -1,18 +1,6 @@
-max-catalysts = 100
 first-active-range = [0, 20]
+active-window-range = [1, 50]
 min-stable-time = 20
-
-# pattern-center = [0, 0]
-# pattern = """
-# x = 4, y = 3, rule = LifeHistory
-# .2A$A2.A$3A!
-# """
-
-# oracle-center = [6, 0]
-# oracle = """
-# x = 13, y = 11, rule = LifeHistory
-# 7.2A$6.A2.A$6.3A4$9.2A$2.2A5.A$.A.A6.3A$.A10.A$2A!
-# """
 
 pattern-center = [0, 0]
 pattern = """
