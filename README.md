@@ -6,7 +6,7 @@ in the style of `ptbsearch`, `catalyst` and CatForce.
 
 Usage
 -----
-To build, run `git submodule update --init` and then `make`.
+To build, run `git submodule update --init --recursive` and then `make`.
 
 ```
 ./LightCone tests/minimal.toml

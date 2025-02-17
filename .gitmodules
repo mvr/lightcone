@@ -3,4 +3,4 @@
 	url = https://github.com/ToruNiina/toml11.git
 [submodule "LifeAPI"]
 	path = LifeAPI
-	url = git@github.com:mvr/LifeAPI.git
+	url = https://github.com/mvr/LifeAPI.git
