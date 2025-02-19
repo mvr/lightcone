@@ -1,0 +1,27 @@
+first-active-range = [100, 101]
+min-stable-time = 40
+max-stationary-time = 50
+
+max-transparent = 1
+
+use-bloom-filter = true
+
+pattern-center = [30, 30]
+pattern = """
+x = 60, y = 60, rule = LifeHistory
+BA58B$2BA57B$3A57B$60B$60B$60B$60B$60B$60B$60B$60B$60B$60B$60B$60B$
+60B$60B$60B$60B$60B$60B$60B$60B$60B$60B$60B$60B$60B$60B$60B$60B$60B$
+60B$60B$60B$60B$60B$60B$60B$60B$60B$60B$60B$60B$60B$60B$60B$60B$60B$
+60B$60B$60B$60B$60B$60B$60B$60B$60B$60B$60B!
+"""
+
+[[catalyst]]
+rle = "2o$2o!"
+recovery-range = [4, 120]
+transparent = true
+
+[[catalyst]]
+rle = "2b2o$bobo$bo$2o!"
+recovery-range = [ 2, 6,]
+required = "2.2D$.2DCA$.DCDC$2DC2D$D2CD$4D!"
+approaches = [ "2.3DC$2.3DC$2.2A2D$.ADA2D$.A4D$2A!",]
