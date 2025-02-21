@@ -630,9 +630,8 @@ LifeState Problem::LightCone(unsigned currentgen) const {
   case ProblemType::TOO_LONG:
     return LifeState::NZOIAround(cell, std::abs((int)gen - (int)currentgen - 1));
   case ProblemType::NO_REACTION:
-    return ~LifeState();
   case ProblemType::NONE:
-    __builtin_unreachable();
+    return ~LifeState();
   }
 }
 
