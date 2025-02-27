@@ -1312,6 +1312,7 @@ int main(int, char *argv[]) {
 
   unsigned contactRadius = 0;
   for (auto &c : catalystdata) {
+    if(c.transparent) continue;
     contactRadius = std::max(contactRadius, c.ContactRadius());
   }
   if constexpr (debug) std::cout << "Contact radius: " << contactRadius << std::endl;
