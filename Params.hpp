@@ -34,6 +34,7 @@ struct CatalystParams {
   unsigned maxRecoveryTime;
 
   bool transparent;
+  bool limited;
 
   static CatalystParams FromToml(toml::value &toml);
 };
@@ -43,6 +44,7 @@ CatalystParams CatalystParams::FromToml(toml::value &toml) {
   LifeState state = LifeState::Parse(rle);
 
   bool transparent = toml::find_or(toml, "transparent", false);
+  bool limited = toml::find_or(toml, "limited", false);
 
   LifeHistory required;
   std::vector<LifeHistory> approaches;
@@ -87,7 +89,7 @@ CatalystParams CatalystParams::FromToml(toml::value &toml) {
   unsigned maxRecoveryTime = recoveryRange[1];
 
   return {state, required, approaches, forbiddens, soups,
-      minRecoveryTime, maxRecoveryTime, transparent};
+          minRecoveryTime, maxRecoveryTime, transparent, limited};
 }
 
 struct SearchParams {
@@ -97,6 +99,7 @@ struct SearchParams {
 
   unsigned maxCatalysts;
   unsigned maxTransparent;
+  unsigned maxLimited;
 
   unsigned minStableTime;
 
@@ -138,6 +141,7 @@ SearchParams SearchParams::FromToml(toml::value &toml) {
 
   params.maxCatalysts = toml::find_or(toml, "max-catalysts", 100);
   params.maxTransparent = toml::find_or(toml, "max-transparent", 0);
+  params.maxLimited = toml::find_or(toml, "max-limited", 1);
   params.minStableTime = toml::find_or(toml, "min-stable-time", 8);
   params.continueAfterSuccess = toml::find_or(toml, "continue-after-success", true);
   params.maxStableTime = toml::find_or(toml, "max-stable-time", std::max(params.minStableTime, (unsigned)64));

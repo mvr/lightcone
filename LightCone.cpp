@@ -105,6 +105,7 @@ struct CatalystData {
   unsigned maxRecoveryTime;
   unsigned minRecoveryTime;
   bool transparent;
+  bool limited;
 
   std::vector<Approach> forbidden;
 
@@ -213,6 +214,7 @@ CatalystData CatalystData::FromParamsNormal(CatalystParams &params) {
   result.maxRecoveryTime = params.maxRecoveryTime;
 
   result.transparent = false;
+  result.limited = params.limited;
 
   if constexpr (debug) {
     std::cout << "Loaded catalyst: " << LifeHistory(result.state, LifeState(), LifeState::Cell({0, 0})) << std::endl;
@@ -257,6 +259,7 @@ CatalystData CatalystData::FromParamsTransparent(CatalystParams &params) {
   result.maxRecoveryTime = params.maxRecoveryTime;
 
   result.transparent = true;
+  result.limited = params.limited;
 
   if constexpr (debug) {
     std::cout << "Loaded transparent catalyst: " << result.state << std::endl;
@@ -292,6 +295,7 @@ CatalystData CatalystData::Transformed(SymmetryTransform t) {
     maxRecoveryTime,
     minRecoveryTime,
     transparent,
+    limited,
     newForbiddens
   };
 
@@ -380,6 +384,7 @@ struct Configuration {
 
   unsigned numCatalysts;
   unsigned numTransparent;
+  unsigned numLimited;
 
   unsigned lastInteraction;
 
@@ -388,7 +393,7 @@ struct Configuration {
   std::vector<bool> transparent;
 
   Configuration()
-      : state{}, catalysts{}, required{}, numCatalysts{0}, numTransparent{0},
+      : state{}, catalysts{}, required{}, numCatalysts{0}, numTransparent{0}, numLimited{0},
         lastInteraction{0}, placements{}, targets{}, transparent{} {}
 
   void MakePlacement(const SearchParams &params, const CatalystData &catalyst,
@@ -401,6 +406,7 @@ void Configuration::MakePlacement(const SearchParams &params, const CatalystData
 
   numCatalysts++;
   if(catalyst.transparent) numTransparent++;
+  if(catalyst.limited) numLimited++;
   lastInteraction = std::max(lastInteraction, placement.gen);
   state |= catalystState;
   catalysts |= catalystState;
@@ -928,6 +934,9 @@ std::vector<Placement> CollectPlacements(const SearchParams &params,
         if (catalyst.contactType != contactType)
           continue;
 
+        if (catalyst.limited && search.config.numLimited == params.maxLimited)
+          continue;
+
         auto validSig = std::any_of(catalyst.approaches.begin(),
                                     catalyst.approaches.end(),
                                     [&](const Approach &approach) {
@@ -1041,6 +1050,7 @@ void MakePlacement(const SearchParams &params, const SearchData &data,
   search.historyM |= catalyst.historyM.Moved(placement.pos);
 
   for (unsigned t = 0; t < data.catalysts.size(); t++) {
+    if(data.catalysts[t].limited && search.config.numLimited == params.maxLimited) continue;
     search.constraints[t].tried |=
         data.collisionMasks[placement.catalystIx * data.catalysts.size() + t]
             .Moved(placement.pos.first, placement.pos.second);
