@@ -1389,10 +1389,7 @@ int main(int, char *argv[]) {
 
   if (params.useBloomFilter) {
     std::cout << "Bloom filter population: " << data.bloom->items << std::endl;
-    std::cout << "Bloom filter approx    : "
-              << data.bloom->ApproximatePopulation() << std::endl;
-    std::cout << "Bloom filter error rate: "
-              << data.bloom->ApproximateErrorRate() << std::endl;
+    std::cout << "Bloom filter error rate: " << data.bloom->ApproximateErrorRate() << std::endl;
   }
 }
 
