@@ -725,7 +725,7 @@ LookaheadOutcome DetermineProblem(const SearchParams &params, const SearchData &
                         (lookahead.hasInteracted && lookahead.recoveredTime > params.maxStableTime);
 
     if (shouldReturn)
-      return LookaheadOutcome(problem, bloomSeenGen, timeoutGen, winnerGen, winner);
+      return {problem, bloomSeenGen, timeoutGen, winnerGen, winner};
 
     if (params.useBloomFilter && bloomSeenGen == std::numeric_limits<unsigned>::max()) {
       auto [key, valid] = lookahead.BloomKey(config);
