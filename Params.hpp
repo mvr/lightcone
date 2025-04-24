@@ -7,13 +7,12 @@
 #include "LifeAPI/LifeAPI.hpp"
 #include "LifeAPI/LifeHistory.hpp"
 
-enum class FilterType { EXACT, EVER };
+enum class FilterType { EXACT, EVER, MATCH };
 
-// TODO
 struct Filter {
   LifeState mask;
   LifeState state;
-  unsigned gen;
+  std::pair<unsigned, unsigned> range;
   FilterType type;
 };
 
@@ -183,21 +182,29 @@ SearchParams SearchParams::FromToml(toml::value &toml) {
       std::vector<int> filterCenterVec =
           toml::find_or<std::vector<int>>(f, "filter-pos", {0, 0});
       LifeHistory pat = LifeHistory::Parse(rle);
-      unsigned filterGen = toml::find_or(f, "filter-gen", -1);
+      pat.Move(filterCenterVec[0], filterCenterVec[1]);
+
+      int filterGen = toml::find_or(f, "filter-gen", -1);
+      std::pair<int, int> filterRange;
+      if (filterGen != -1) {
+        filterRange = {filterGen, filterGen};
+      } else {
+        std::vector<int> filterRangeVec = toml::find_or<std::vector<int>>(toml, "filter-range", {-1, -1});
+        filterRange = {-filterRangeVec[0], -filterRangeVec[1]};
+      }
 
       FilterType filterType;
       std::string filterTypeStr =
           toml::find_or<std::string>(f, "filter-type", "EVER");
       if (filterTypeStr == "EXACT") {
         filterType = FilterType::EXACT;
-      }
-      if (filterTypeStr == "EVER") {
+      } else if (filterTypeStr == "EVER") {
         filterType = FilterType::EVER;
+      } else if (filterTypeStr == "MATCH") {
+        filterType = FilterType::MATCH;
       }
 
-      pat.Move(filterCenterVec[0], filterCenterVec[1]);
-
-      params.filters.push_back({pat.marked, pat.state, filterGen, filterType});
+      params.filters.push_back({pat.marked, pat.state, filterRange, filterType});
     }
   } else {
     params.hasFilter = false;

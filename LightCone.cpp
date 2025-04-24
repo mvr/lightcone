@@ -1057,6 +1057,51 @@ void MakePlacement(const SearchParams &params, const SearchData &data,
   }
 }
 
+bool PassesFilters(const SearchParams &params, const Configuration &config) {
+  LifeState state = config.state;
+  unsigned firstInteractionGen = config.placements[0].gen;
+
+  unsigned maxFilterTime = 0;
+  for (auto &f : params.filters) {
+    maxFilterTime = std::max(maxFilterTime, f.range.second);
+  }
+
+  std::vector<bool> filterPassed(params.filters.size(), false);
+  for (unsigned i = 0; i <= maxFilterTime; i++) {
+    for (unsigned fi = 0; fi < params.filters.size(); fi++) {
+      auto &f = params.filters[fi];
+
+      bool shouldCheck = f.type == FilterType::EVER || (f.type == FilterType::EXACT && f.range.first <= i && i <= f.range.second);
+      if (shouldCheck && ((state ^ f.state) & f.mask).IsEmpty())
+        filterPassed[fi] = true;
+
+      if (f.type == FilterType::MATCH) {
+        // TODO
+      }
+    }
+
+    state.Step();
+  }
+
+  return std::all_of(filterPassed.begin(), filterPassed.end(),
+                  [](bool b) { return b; });
+}
+
+void ReportWinner(const SearchParams &params, const SearchData &data, SearchNode &search) {
+  if(params.hasFilter && !PassesFilters(params, search.config))
+    return;
+
+  std::cout << "Winner: " << search.config.state << std::endl;
+  data.allSolutions->push_back(search.config);
+
+  if constexpr (debug) {
+    std::cout << "Required: " << LifeHistory(search.config.state, LifeState(), search.config.required) << std::endl;
+    for (auto &p : search.config.placements) {
+      std::cout << "Placement: " << p.catalystIx << " at (" << p.pos.first << ", " << p.pos.second << ")" << std::endl;
+    }
+  }
+}
+
 void RunSearch(const SearchParams &params, const SearchData &data,
                SearchNode &search, LookaheadOutcome constraint) {
   if constexpr (debug) std::cout << "Starting node: " << search.config.state << std::endl;
@@ -1097,19 +1142,12 @@ void RunSearch(const SearchParams &params, const SearchData &data,
     }
   }
 
-  if (constraint.problem.type == ProblemType::TOO_LONG) {
-    std::cout << "Too long: " << search.config.state << std::endl;
-  }
+  // if (constraint.problem.type == ProblemType::TOO_LONG) {
+  //   std::cout << "Too long: " << search.config.state << std::endl;
+  // }
 
   if (constraint.winner && constraint.winnerGen <= constraint.bloomSeenGen) {
-    std::cout << "Winner: " << search.config.state << std::endl;
-    data.allSolutions->push_back(search.config);
-    if constexpr (debug) {
-      std::cout << "Required: " << LifeHistory(search.config.state, LifeState(), search.config.required) << std::endl;
-      for (auto &p : search.config.placements) {
-        std::cout << "Placement: " << p.catalystIx << " at (" << p.pos.first << ", " << p.pos.second << ")" << std::endl;
-      }
-    }
+    ReportWinner(params, data, search);
     if (!params.continueAfterSuccess)
       return;
   }
