@@ -1,0 +1,37 @@
+first-active-range = [92, 93]
+active-window-range = [0, 60]
+
+min-stable-time = 10
+
+max-transparent = 1
+
+pattern-center = [25, 25]
+pattern = """
+x = 50, y = 50, rule = LifeHistory
+.A$2.A$3A2$4.46B$4.46B$4.46B$4.46B$4.46B$4.46B$4.46B$4.46B$4.46B$4.
+46B$4.46B$4.46B$4.46B$4.46B$4.46B$4.46B$4.46B$4.46B$4.46B$4.46B$4.46B
+$4.46B$4.46B$4.46B$4.46B$4.46B$4.46B$4.46B$4.46B$4.46B$4.46B$4.46B$4.
+46B$4.46B$4.46B$4.46B$4.46B$4.46B$4.46B$4.46B$4.46B$4.46B$4.46B$4.46B
+$4.46B$4.46B!
+"""
+
+# Block
+[[catalyst]]
+rle = "2o$2o!"
+recovery-range = [4, 80]
+transparent = true
+
+# Eater 1
+[[catalyst]]
+rle = "2b2o$bobo$bo$2o!"
+recovery-range = [ 2, 10,]
+required = "2.2D$.2DCA$.DCDC$2DC2D$D2CD$4D!"
+approaches = [ "2.3DC$2.3DC$2.2A2D$.ADA2D$.A4D$2A!",]
+forbidden = [ "4.3D$4.DC3D$4.DCDCD$4.D2C2D$2.2A4D$.A.A$.A$2A!", "5.3D$4.2DCD$4.DC3D$4.D3CD$2.2A5D$.A.A$.A$2A!",]
+
+# Heart of the Snark
+[[catalyst]]
+rle = "8bo$4b2obobo$3bobobobo$o2bobobobob2o$4ob2o2bo2bo$4bo4b2o$2bobo$2b2o!"
+recovery-range = [4, 10]
+required = "9.2D$9.C2D$5.2A.ADCD$3D.A.A.ADC4D$DC2DADADCDCD2CD$D4CD2C2DC2DCD$5DC4D2C3D$2.DCDCD2.4D$2.D2C2D$2.4D!"
+approaches = [ "2.D3C3D$.3DC4D$.7DA$.3D2ADA.A$.2DADADA.A$A2DADA.A.A.2A$4A.2A2.A2.A$4.A4.2A$2.A.A$2.2A!", ]

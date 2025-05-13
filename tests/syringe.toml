@@ -1,0 +1,55 @@
+first-active-range = [89, 170]
+active-window-range = [0, 80]
+
+min-stable-time = 40
+
+max-catalysts = 4
+
+use-bloom-filter = true
+
+pattern-center = [25, 25]
+pattern = """
+x = 50, y = 50, rule = LifeHistory
+.A$2.A$3A2$4.46B$4.46B$4.46B$4.46B$4.46B$4.46B$4.46B$4.46B$4.46B$4.
+46B$4.46B$4.46B$4.46B$4.46B$4.46B$4.46B$4.46B$4.46B$4.46B$4.46B$4.46B
+$4.46B$4.46B$4.19B2A25B$4.19B2A25B$4.46B$4.46B$4.46B$4.46B$4.46B$4.
+46B$4.46B$4.46B$4.46B$4.46B$4.46B$4.46B$4.46B$4.46B$4.46B$4.46B$4.46B
+$4.46B$4.46B$4.46B$4.46B!
+"""
+
+# This could also be done using a transparent block catalyst directly.
+[[filter]]
+filter-gen = 170
+filter-pos = [-2, 2]
+filter-type = 'EXACT'
+filter = '2C$2C!'
+
+# Block
+[[catalyst]]
+rle = "2o$2o!"
+recovery-range = [ 2, 14,]
+required = "4D$D2CD$.2A!"
+approaches = [ "2D2A2D$2D2A2D$6D$.2DC2D!", "2D2A2D$2D2A2D$6D$2DC2D!",]
+
+# Eater 1
+[[catalyst]]
+rle = "2b2o$bobo$bo$2o!"
+recovery-range = [ 2, 10,]
+required = "2.2D$.2DCA$.DCDC$2DC2D$D2CD$4D!"
+approaches = [ "2.3DC$2.3DC$2.2A2D$.ADA2D$.A4D$2A!",]
+forbidden = [ "4.3D$4.DC3D$4.DCDCD$4.D2C2D$2.2A4D$.A.A$.A$2A!", "5.3D$4.2DCD$4.DC3D$4.D3CD$2.2A5D$.A.A$.A$2A!",]
+
+# Eater 2
+[[catalyst]]
+rle = "3bob2o$b3ob2o$o$b3ob2o$3bobo$3bobo$4bo!"
+recovery-range = [ 4, 10,]
+required = "3.D$.3DCD2A$2D3C.2A$DC4D.2D$2D3CD2CD$.3DCDC2D$3.DCDCD$3.2DC2D$4.3D!"
+approaches = [ "4.D$4.3D2C$4.5D$3.AD2A2D$.3AD2A2D$A$.3A.2A$3.A.A$3.A.A$4.A!",]
+forbidden = [ "6.3D$6.DC3D$6.DCDCD$6.D2C2D$6.4D$3.A.2A$.3A.2A$A$.3A.2A$3.A.A$3.A.A$4.A!", "7.3D$6.2DCD$6.DC3D$6.D3CD$6.5D$3.A.2A$.3A.2A$A$.3A.2A$3.A.A$3.A.A$4.A!",]
+
+# Beehive with tail
+[[catalyst]]
+rle = "2o$bo$bob2o$2bo2bo$3b2o!"
+recovery-range = [ 3, 6,]
+required = "4D$D2CD$2DC4D$.DCD2CD$.2DC2.C$4.2A!"
+approaches = [ "3D$D2AD$2DA4D$.DAD2A2D$2.DA2DA2D$3.D2A4D$4.3DCDC$6.DC2D$6.DCDC$6.3D!",]
