@@ -602,8 +602,15 @@ Problem Lookahead::CurrentProblem(const SearchParams &params, const SearchData &
         LifeState nonTransparentCells = config.targets[i].wanted & ~everActive;
 
         std::pair<int, int> cell = nonTransparentCells.FirstOn();
-        if (cell.first != -1 && cell.second != -1)
-          return {cell, gen, ProblemType::NOT_TRANSPARENT};
+        if (cell.first != -1 && cell.second != -1) {
+          // Do a quick check that it's actually stable and this
+          // recovery isn't just temporary.
+          // TODO: this should be controlled by a parameter
+          LifeState check = state;
+          check.Step(10);
+          if (check.Contains(config.targets[i]))
+            return {cell, gen, ProblemType::NOT_TRANSPARENT};
+        }
       }
     }
   }
