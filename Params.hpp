@@ -7,6 +7,7 @@
 #include "LifeAPI/LifeAPI.hpp"
 #include "LifeAPI/LifeHistory.hpp"
 
+enum class FilterMode { ALL, ANY };
 enum class FilterType { EXACT, EVER, MATCH };
 
 struct Filter {
@@ -116,6 +117,7 @@ struct SearchParams {
   bool useBloomFilter;
 
   bool hasFilter;
+  FilterMode filterMode;
   std::vector<Filter> filters;
 
   bool hasForbidden;
@@ -175,6 +177,14 @@ SearchParams SearchParams::FromToml(toml::value &toml) {
 
   if (toml.contains("filter")) {
     params.hasFilter = true;
+
+    std::string filterModeStr =
+        toml::find_or<std::string>(toml, "filter-mode", "ALL");
+    if (filterModeStr == "ANY") {
+      params.filterMode = FilterMode::ANY;
+    } else {
+      params.filterMode = FilterMode::ALL;
+    }
 
     auto filters = toml::find<std::vector<toml::value>>(toml, "filter");
     for (auto &f : filters) {

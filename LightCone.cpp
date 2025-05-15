@@ -1090,8 +1090,13 @@ bool PassesFilters(const SearchParams &params, const Configuration &config) {
     state.Step();
   }
 
-  return std::all_of(filterPassed.begin(), filterPassed.end(),
-                  [](bool b) { return b; });
+  if(params.filterMode == FilterMode::ANY) {
+    return std::any_of(filterPassed.begin(), filterPassed.end(),
+                       [](bool b) { return b; });
+  } else {
+    return std::all_of(filterPassed.begin(), filterPassed.end(),
+                       [](bool b) { return b; });
+  }
 }
 
 void ReportWinner(const SearchParams &params, const SearchData &data, SearchNode &search) {
