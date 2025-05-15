@@ -189,8 +189,8 @@ SearchParams SearchParams::FromToml(toml::value &toml) {
       if (filterGen != -1) {
         filterRange = {filterGen, filterGen};
       } else {
-        std::vector<int> filterRangeVec = toml::find_or<std::vector<int>>(toml, "filter-range", {-1, -1});
-        filterRange = {-filterRangeVec[0], -filterRangeVec[1]};
+        std::vector<int> filterRangeVec = toml::find_or<std::vector<int>>(f, "filter-range", {-1, -1});
+        filterRange = {filterRangeVec[0], filterRangeVec[1]};
       }
 
       FilterType filterType;
