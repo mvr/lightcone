@@ -6,6 +6,7 @@
 
 #include "LifeAPI/LifeAPI.hpp"
 #include "LifeAPI/LifeHistory.hpp"
+#include "LifeAPI/Symmetry.hpp"
 
 enum class FilterMode { ALL, ANY };
 enum class FilterType { EXACT, EVER, MATCH };
@@ -13,6 +14,7 @@ enum class FilterType { EXACT, EVER, MATCH };
 struct Filter {
   LifeState mask;
   LifeState state;
+  std::vector<LifeState> stateTransforms;
   std::pair<unsigned, unsigned> range;
   FilterType type;
 };
@@ -118,6 +120,7 @@ struct SearchParams {
 
   bool hasFilter;
   FilterMode filterMode;
+  unsigned filterMatchSurvival;
   std::vector<Filter> filters;
 
   bool hasForbidden;
@@ -186,6 +189,8 @@ SearchParams SearchParams::FromToml(toml::value &toml) {
       params.filterMode = FilterMode::ALL;
     }
 
+    params.filterMatchSurvival = toml::find_or(toml, "filter-match-survival-time", 0);
+
     auto filters = toml::find<std::vector<toml::value>>(toml, "filter");
     for (auto &f : filters) {
       std::string rle = toml::find_or<std::string>(f, "filter", "");
@@ -203,7 +208,7 @@ SearchParams SearchParams::FromToml(toml::value &toml) {
         filterRange = {filterRangeVec[0], filterRangeVec[1]};
       }
 
-      FilterType filterType;
+      FilterType filterType = FilterType::EXACT;
       std::string filterTypeStr =
           toml::find_or<std::string>(f, "filter-type", "EVER");
       if (filterTypeStr == "EXACT") {
@@ -214,7 +219,7 @@ SearchParams SearchParams::FromToml(toml::value &toml) {
         filterType = FilterType::MATCH;
       }
 
-      params.filters.push_back({pat.marked, pat.state, filterRange, filterType});
+      params.filters.push_back({pat.marked, pat.state, pat.state.SymmetryOrbit(), filterRange, filterType});
     }
   } else {
     params.hasFilter = false;

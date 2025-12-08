@@ -1082,8 +1082,27 @@ bool PassesFilters(const SearchParams &params, const Configuration &config) {
       if (shouldCheck && ((state ^ f.state) & f.mask).IsEmpty())
         filterPassed[fi] = true;
 
-      if (f.type == FilterType::MATCH) {
-        // TODO
+      if (f.type == FilterType::MATCH && f.range.first <= i && i <= f.range.second) {
+        for (auto &target : f.stateTransforms) {
+          LifeState matches = state.Match(target);
+          if (!matches.IsEmpty()) {
+            LifeState matchedPart = matches.Convolve(target);
+
+            // Check that the matched part is not interfered with
+            if(params.filterMatchSurvival > 0) {
+              LifeState matchedAdvanced = matchedPart;
+              matchedAdvanced.Step(params.filterMatchSurvival);
+
+              LifeState workspaceAdvanced = state;
+              workspaceAdvanced.Step(params.filterMatchSurvival);
+
+              if (!(matchedAdvanced & ~workspaceAdvanced).IsEmpty())
+                continue;
+            }
+
+            filterPassed[fi] = true;
+          }
+        }
       }
     }
 
