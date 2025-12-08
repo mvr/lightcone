@@ -436,6 +436,7 @@ enum struct ProblemType {
   NO_REACTION,
   NOT_TRANSPARENT,
   STATIONARY,
+  FORBIDDEN,
 };
 
 std::ostream &operator<<(std::ostream &out, const ProblemType value) {
@@ -449,6 +450,7 @@ std::ostream &operator<<(std::ostream &out, const ProblemType value) {
     case ProblemType::NO_REACTION:     return "NO_REACTION";
     case ProblemType::NOT_TRANSPARENT: return "NOT_TRANSPARENT";
     case ProblemType::STATIONARY:      return "STATIONARY";
+    case ProblemType::FORBIDDEN:       return "FORBIDDEN";
     }
   }();
 }
@@ -560,10 +562,17 @@ std::pair<LifeState, bool> Lookahead::BloomKey(const Configuration &config) cons
 Problem Lookahead::CurrentProblem(const SearchParams &params, const SearchData &data,
                            const Configuration &config) const {
   {
-    LifeState requiredViolations = config.required & (state ^ config.catalysts);
+    const LifeState requiredViolations = config.required & (state ^ config.catalysts);
     std::pair<int, int> cell = requiredViolations.FirstOn();
     if (cell != std::make_pair(-1, -1))
       return {cell, gen, ProblemType::REQUIRED};
+  }
+
+  {
+    const LifeState &forbiddenViolations = params.state.marked & state;
+    std::pair<int, int> cell = forbiddenViolations.FirstOn();
+    if (cell != std::make_pair(-1, -1))
+      return {cell, gen, ProblemType::FORBIDDEN};
   }
 
   if (params.maxStationaryTime != 0) {
@@ -641,6 +650,7 @@ LifeState Problem::LightCone(unsigned currentgen) const {
   case ProblemType::NOT_TRANSPARENT:
   case ProblemType::STATIONARY:
   case ProblemType::TOO_LONG:
+  case ProblemType::FORBIDDEN:
     return LifeState::NZOIAround(cell, std::abs((int)gen - (int)currentgen - 1));
   case ProblemType::NO_REACTION:
   case ProblemType::NONE:
@@ -656,6 +666,7 @@ bool Problem::IsGlobal() const {
   case ProblemType::NOT_TRANSPARENT:
   case ProblemType::STATIONARY:
   case ProblemType::TOO_LONG:
+  case ProblemType::FORBIDDEN:
     return false;
   case ProblemType::NO_REACTION:
   case ProblemType::NONE:
