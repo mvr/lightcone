@@ -1075,7 +1075,14 @@ bool PassesFilters(const SearchParams &params, const Configuration &config) {
 
   std::vector<bool> filterPassed(params.filters.size(), false);
   for (unsigned i = 0; i <= maxFilterTime; i++) {
+    const LifeState requiredViolations = config.required & (state ^ config.catalysts);
+    if (!requiredViolations.IsEmpty())
+      break;
+
     for (unsigned fi = 0; fi < params.filters.size(); fi++) {
+      if (filterPassed[fi])
+        continue;
+
       auto &f = params.filters[fi];
 
       bool shouldCheck = f.type == FilterType::EVER || (f.type == FilterType::EXACT && f.range.first <= i && i <= f.range.second);
