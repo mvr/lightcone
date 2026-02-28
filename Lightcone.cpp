@@ -362,7 +362,7 @@ LifeState CatalystData::CollisionMask(const CatalystData &b) const {
 
 unsigned CatalystData::ContactRadius() const {
   auto [x1,y1,x2,y2] = contact.XYBounds();
-  return std::max({std::abs(x1), std::abs(y1), std::abs(x2), std::abs(y1)});
+  return std::max({std::abs(x1), std::abs(y1), std::abs(x2), std::abs(y2)});
 }
 
 struct Placement {
