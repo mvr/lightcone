@@ -9,7 +9,7 @@ Usage
 To build, run `git submodule update --init --recursive` and then `make`.
 
 ```
-./LightCone examples/minimal.toml
+./Lightcone examples/minimal.toml
 ```
 
 Input Parameters

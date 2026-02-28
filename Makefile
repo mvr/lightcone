@@ -9,7 +9,7 @@ LDFLAGS =
 
 CXXINCLUDE = -Itoml/include
 
-all: LightCone
+all: Lightcone
 
-LightCone: LightCone.cpp *.hpp LifeAPI/*.hpp
-	$(CXX) $(CXXFLAGS) $(CXXINCLUDE) -o LightCone LightCone.cpp $(LDFLAGS)
+Lightcone: Lightcone.cpp *.hpp LifeAPI/*.hpp
+	$(CXX) $(CXXFLAGS) $(CXXINCLUDE) -o Lightcone Lightcone.cpp $(LDFLAGS)
