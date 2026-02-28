@@ -1392,14 +1392,19 @@ void PrintSummary(std::vector<Configuration> &pats) {
   }
 }
 
-int main(int, char *argv[]) {
+int main(int argc, char *argv[]) {
+  if (argc < 2) {
+    std::cerr << "Usage: " << argv[0] << " <config.toml>" << std::endl;
+    return 1;
+  }
+
   auto toml = toml::parse(argv[1]);
   SearchParams params = SearchParams::FromToml(toml);
 
   if (params.maxStationaryTime != 0 &&
       (unsigned)params.maxStationaryTime > maxStationaryGens) {
-    std::cout << "`max-stationary-time` is higher than allowed by the hardcoded value!" << std::endl;
-    exit(1);
+    std::cerr << "`max-stationary-time` is higher than allowed by the hardcoded value!" << std::endl;
+    return 1;
   }
 
   std::vector<Configuration> allSolutions;
@@ -1443,6 +1448,8 @@ int main(int, char *argv[]) {
     std::cout << "Bloom filter population: " << data.bloom->items << std::endl;
     std::cout << "Bloom filter error rate: " << data.bloom->ApproximateErrorRate() << std::endl;
   }
+
+  return 0;
 }
 
 // Ideas:
