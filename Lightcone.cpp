@@ -1,4 +1,5 @@
 #include <iostream>
+#include <memory>
 #include <vector>
 
 #include "LifeAPI/LifeAPI.hpp"
@@ -1424,11 +1425,16 @@ int main(int argc, char *argv[]) {
 
   std::vector<LifeState> masks = CalculateCollisionMasks(catalystdata);
 
-  LifeBloom *bloom = 0;
+  std::unique_ptr<LifeBloom> bloom;
   if (params.useBloomFilter)
-    bloom = new LifeBloom();
+    bloom = std::make_unique<LifeBloom>();
 
-  SearchData data = {catalystdata, masks, contactRadius, bloom, &allSolutions};
+  SearchData data = {
+      catalystdata,
+      masks,
+      contactRadius,
+      bloom.get(),
+      &allSolutions};
 
   SearchNode search(params, data);
 
