@@ -1,2 +1,9 @@
-LightCone
+# Build system artifacts
+/CMakeCache.txt
+/CMakeFiles/
+/cmake_install.cmake
+/compile_commands.json
+
+# Binaries and debug symbols
+/Lightcone
 *.dSYM/
