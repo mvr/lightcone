@@ -6,9 +6,11 @@ in the style of `ptbsearch`, `catalyst` and CatForce.
 
 Usage
 -----
-To build, run `git submodule update --init --recursive` and then `make`.
+To build, run `git submodule update --init --recursive` and then:
 
 ```
+cmake .
+cmake --build . 
 ./Lightcone examples/minimal.toml
 ```
 
