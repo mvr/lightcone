@@ -1101,7 +1101,7 @@ bool PassesFilters(const SearchParams &params, const Configuration &config) {
       if (shouldCheck && ((state ^ f.state) & f.mask).IsEmpty())
         filterPassed[fi] = true;
 
-      if (f.type == FilterType::MATCH && f.range.first <= i && i <= f.range.second) {
+      if (f.type == FilterType::MATCH && f.range.first <= i && i <= f.range.second && i >= config.lastInteraction) {
         for (auto &target : f.stateTransforms) {
           LifeState matches = state.Match(target);
           if (!matches.IsEmpty()) {
