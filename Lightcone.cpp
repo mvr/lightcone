@@ -1145,7 +1145,7 @@ void ReportWinner(const SearchParams &params, const SearchData &data, SearchNode
   if(params.hasFilter && !PassesFilters(params, search.config))
     return;
 
-  if(params.maxTransparent > 0 && search.config.numTransparent == 0)
+  if(search.config.numTransparent != params.maxTransparent)
     return;
 
   std::cout << "Winner: " << search.config.state << std::endl;
