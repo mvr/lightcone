@@ -1117,6 +1117,10 @@ bool PassesFilters(const SearchParams &params, const Configuration &config) {
 
               if (!(matchedAdvanced & ~workspaceAdvanced).IsEmpty())
                 continue;
+
+              LifeState remaining = workspaceAdvanced & ~matchedAdvanced & ~config.catalysts;
+              if (remaining.GetPop() > params.filterMatchMaxJunk)
+                continue;
             }
 
             filterPassed[fi] = true;

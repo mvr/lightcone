@@ -121,6 +121,7 @@ struct SearchParams {
   bool hasFilter;
   FilterMode filterMode;
   unsigned filterMatchSurvival;
+  unsigned filterMatchMaxJunk;
   std::vector<Filter> filters;
 
   bool hasForbidden;
@@ -190,6 +191,7 @@ SearchParams SearchParams::FromToml(toml::value &toml) {
     }
 
     params.filterMatchSurvival = toml::find_or(toml, "filter-match-survival-time", 0);
+    params.filterMatchMaxJunk = toml::find_or(toml, "filter-match-max-junk", 100);
 
     auto filters = toml::find<std::vector<toml::value>>(toml, "filter");
     for (auto &f : filters) {
