@@ -4,7 +4,7 @@ Lightcone
 Lightcone is a Game of Life search tool for conduits and oscillators,
 in the style of `ptbsearch`, `catalyst` and CatForce.
 
-For some details on it works, see this [blog
+For some details on how it works, see this [blog
 post](https://mvr.github.io/posts/lightcone.html).
 
 Usage
