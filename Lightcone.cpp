@@ -901,10 +901,16 @@ std::vector<Placement> CollectPlacements(const SearchParams &params,
   if constexpr (debug) std::cout << "history2: " << currentHistory2 << std::endl;
   if constexpr (debug) std::cout << "historyM: " << currentHistoryM << std::endl;
 
-  // TODO: this will exclude some transparent placements, no?
   LifeState somePlaceable = LifeState();
   for (unsigned i = 0; i < data.catalysts.size(); i++) {
-    somePlaceable |= ~(search.constraints[i].tried | search.constraints[i].knownUnplaceable);
+    LifeState origins = ~(search.constraints[i].tried | search.constraints[i].knownUnplaceable);
+    const CatalystData &catalyst = data.catalysts[i];
+    if (catalyst.transparent) {
+      if (search.config.numTransparent < params.maxTransparent)
+        somePlaceable |= origins.Convolve(catalyst.history1 | catalyst.history2);
+    } else {
+      somePlaceable |= origins;
+    }
   }
 
   somePlaceable &= ~(search.history1 & search.history2 & search.historyM);
