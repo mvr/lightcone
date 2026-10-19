@@ -331,34 +331,24 @@ std::vector<CatalystData> CatalystData::FromParams(CatalystParams &params) {
 LifeState CatalystData::CollisionMask(const CatalystData &b) const {
   // Block immediate births
   LifeState result = state.InteractionOffsets(b.state);
+  // Actual occupation of a neighbour's required-dead cell is never allowed.
+  result |= state.Convolve((b.required & ~b.state).Mirrored());
+  result |= (required & ~state).Convolve(b.state.Mirrored());
 
-  // Block active intersecting with required
-  result |= (state.ZOI() & ~required).Convolve(b.required.Mirrored());
+  if (!transparent && !b.transparent) {
+    // Transparent reactions may use this area while preserving the neighbour's
+    // required cells. Those constraints are still checked during evolution.
+    result |= (state.ZOI() & ~required).Convolve(b.required.Mirrored());
+    result |= (b.state.ZOI() & ~b.required).Mirrored().Convolve(required);
 
-  // And vice versa
-  result |= (b.state.ZOI() & ~b.required).Mirrored().Convolve(required);
+    LifeState selfActive = (state.ZOI() & ~required) | state;
+    result |= selfActive.Convolve(b.contact.Mirrored());
 
-  LifeState newresult;
+    LifeState bActive = (b.state.ZOI() & ~b.required) | b.state;
+    result |= bActive.Mirrored().Convolve(contact);
+  }
 
-  LifeState selfActive = (state.ZOI() & ~required) | state;
-  // LifeState activeCount1(UNINITIALIZED), activeCount2(UNINITIALIZED), activeCountM(UNINITIALIZED);
-  // selfActive.InteractionCounts(activeCount1, activeCount2, activeCountM);
-
-  // newresult |= activeCount2.Convolve((b.required & b.history1).Mirrored());
-  // newresult |= activeCount1.Convolve((b.required & b.history2).Mirrored());
-
-  newresult |= selfActive.Convolve(b.contact.Mirrored());
-
-  LifeState bActive = (b.state.ZOI() & ~b.required) | b.state;
-  // LifeState bActiveCount1(UNINITIALIZED), bActiveCount2(UNINITIALIZED), bActiveCountM(UNINITIALIZED);
-  // bActive.InteractionCounts(bActiveCount1, bActiveCount2, bActiveCountM);
-
-  // newresult |= bActiveCount2.Mirrored().Convolve(required & history1);
-  // newresult |= bActiveCount1.Mirrored().Convolve(required & history2);
-
-  newresult |= bActive.Mirrored().Convolve(contact);
-
-  return result | newresult;
+  return result;
 }
 
 unsigned CatalystData::ContactRadius() const {
