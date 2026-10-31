@@ -631,8 +631,15 @@ Problem Lookahead::CurrentProblem(const SearchParams &params, const SearchData &
           // recovery isn't just temporary.
           // TODO: this should be controlled by a parameter
           LifeState check = state;
-          check.Step(10);
-          if (check.Contains(config.targets[i]))
+          bool staysRecovered = true;
+          for (unsigned step = 0; step < 10; step++) {
+            check.Step();
+            if (!check.Contains(config.targets[i])) {
+              staysRecovered = false;
+              break;
+            }
+          }
+          if (staysRecovered)
             return {cell, gen, ProblemType::NOT_TRANSPARENT};
         }
       }
