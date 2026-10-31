@@ -132,9 +132,21 @@ static bool AlignCatalystSignature(LifeHistory &signature, const LifeState &body
 }
 
 std::optional<CatalystData> CatalystData::FromParamsNormal(CatalystParams &params, std::string &error) {
-  for (auto &approach : params.approaches) {
+  if (params.approaches.empty()) {
+    error = "ordinary catalysts need at least one approach";
+    return std::nullopt;
+  }
+  params.required.AlignWith(params.state);
+  for (unsigned i = 0; i < params.approaches.size(); ++i) {
+    auto &approach = params.approaches[i];
     if (!AlignCatalystSignature(approach, params.state)) {
       error = "signature does not contain its catalyst shape";
+      return std::nullopt;
+    }
+    if (!(approach.state & approach.marked &
+          (params.state | params.required.marked)).IsEmpty()) {
+      error = "approach " + std::to_string(i + 1) +
+          " requires a cell to be both alive and dead (overlaps the catalyst or required mask)";
       return std::nullopt;
     }
   }
@@ -152,7 +164,8 @@ std::optional<CatalystData> CatalystData::FromParamsNormal(CatalystParams &param
   }
 
   std::pair<int, int> contactOrigin;
-  unsigned contactCount;
+  unsigned contactCount = 0;
+  bool foundContact = false;
   LifeState tocheck = commonContact;
   for (auto cell = tocheck.FirstOn(); cell != std::make_pair(-1, -1);
        tocheck.Erase(cell), cell = tocheck.FirstOn()) {
@@ -170,8 +183,14 @@ std::optional<CatalystData> CatalystData::FromParamsNormal(CatalystParams &param
     if (allequal) {
       contactOrigin = cell;
       contactCount = count;
+      foundContact = true;
       break;
     }
+  }
+
+  if (!foundContact) {
+    error = "approaches need a common contact cell with the same live neighbour count";
+    return std::nullopt;
   }
 
   params.state.Move(-contactOrigin.first, -contactOrigin.second);
@@ -185,7 +204,7 @@ std::optional<CatalystData> CatalystData::FromParamsNormal(CatalystParams &param
     soup.Move(-contactOrigin.first, -contactOrigin.second);
   }
 
-  params.required.AlignWith(params.state);
+  params.required.Move(-contactOrigin.first, -contactOrigin.second);
 
   CatalystData result;
 
@@ -209,9 +228,6 @@ std::optional<CatalystData> CatalystData::FromParamsNormal(CatalystParams &param
     approach.approachOff = (approachPat.marked & ~approachPat.state) |
                        result.state | (result.required & ~result.state);
     approach.RecalculateSignature();
-
-    assert((approach.approachOn & approach.approachOff).IsEmpty());
-    // More sanity checks?
 
     result.approaches.push_back(approach);
   }
