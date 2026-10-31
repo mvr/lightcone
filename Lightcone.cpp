@@ -1,5 +1,6 @@
 #include <iostream>
 #include <memory>
+#include <optional>
 #include <vector>
 
 #include "LifeAPI/LifeAPI.hpp"
@@ -110,9 +111,9 @@ struct CatalystData {
 
   std::vector<Approach> forbidden;
 
-  static CatalystData FromParamsNormal(CatalystParams &params);
-  static CatalystData FromParamsTransparent(CatalystParams &params);
-  static std::vector<CatalystData> FromParams(CatalystParams &params);
+  static std::optional<CatalystData> FromParamsNormal(CatalystParams &params, std::string &error);
+  static std::optional<CatalystData> FromParamsTransparent(CatalystParams &params, std::string &error);
+  static std::optional<std::vector<CatalystData>> FromParams(CatalystParams &params, std::string &error);
 
   CatalystData Transformed(SymmetryTransform t);
 
@@ -120,9 +121,22 @@ struct CatalystData {
   unsigned ContactRadius() const;
 };
 
-CatalystData CatalystData::FromParamsNormal(CatalystParams &params) {
+static bool AlignCatalystSignature(LifeHistory &signature, const LifeState &body) {
+  LifeState offsets = (signature.state & ~signature.marked).MatchLive(body);
+  if (offsets.IsEmpty()) {
+    return false;
+  }
+  auto offset = offsets.FirstOn();
+  signature.Move(-offset.first, -offset.second);
+  return true;
+}
+
+std::optional<CatalystData> CatalystData::FromParamsNormal(CatalystParams &params, std::string &error) {
   for (auto &approach : params.approaches) {
-    approach.AlignWith(params.state);
+    if (!AlignCatalystSignature(approach, params.state)) {
+      error = "signature does not contain its catalyst shape";
+      return std::nullopt;
+    }
   }
 
   LifeState commonContact = ~LifeState();
@@ -204,7 +218,10 @@ CatalystData CatalystData::FromParamsNormal(CatalystParams &params) {
 
   for (auto &forbiddenpat : params.forbiddens) {
     Approach approach;
-    forbiddenpat.AlignWith(params.state);
+    if (!AlignCatalystSignature(forbiddenpat, params.state)) {
+      error = "signature does not contain its catalyst shape";
+      return std::nullopt;
+    }
     approach.approachOn = forbiddenpat.state & forbiddenpat.marked;
     approach.approachOff = ~forbiddenpat.state & forbiddenpat.marked;
     approach.RecalculateSignature();
@@ -232,7 +249,7 @@ CatalystData CatalystData::FromParamsNormal(CatalystParams &params) {
   return result;
 }
 
-CatalystData CatalystData::FromParamsTransparent(CatalystParams &params) {
+std::optional<CatalystData> CatalystData::FromParamsTransparent(CatalystParams &params, std::string &error) {
   CatalystData result;
 
   result.state = params.state;
@@ -247,7 +264,10 @@ CatalystData CatalystData::FromParamsTransparent(CatalystParams &params) {
 
   for (auto &forbiddenpat : params.forbiddens) {
     Approach approach;
-    forbiddenpat.AlignWith(params.state);
+    if (!AlignCatalystSignature(forbiddenpat, params.state)) {
+      error = "signature does not contain its catalyst shape";
+      return std::nullopt;
+    }
     approach.approachOn = forbiddenpat.state & forbiddenpat.marked;
     approach.approachOff = ~forbiddenpat.state & forbiddenpat.marked;
     approach.RecalculateSignature();
@@ -303,18 +323,22 @@ CatalystData CatalystData::Transformed(SymmetryTransform t) {
   return result;
 }
 
-std::vector<CatalystData> CatalystData::FromParams(CatalystParams &params) {
+std::optional<std::vector<CatalystData>> CatalystData::FromParams(CatalystParams &params, std::string &error) {
   if (params.transparent) {
-    CatalystData data = CatalystData::FromParamsTransparent(params);
+    auto data = CatalystData::FromParamsTransparent(params, error);
+    if (!data)
+      return std::nullopt;
 
     std::vector<CatalystData> result;
     for (auto t : params.state.SymmetryOrbitRepresentatives()) {
-      result.push_back(data.Transformed(t));
+      result.push_back(data->Transformed(t));
     }
     return result;
   }
 
-  CatalystData data = CatalystData::FromParamsNormal(params);
+  auto data = CatalystData::FromParamsNormal(params, error);
+  if (!data)
+    return std::nullopt;
   std::vector<CatalystData> result;
 
   // TODO: use the actual symmetry of the catalyst
@@ -322,7 +346,7 @@ std::vector<CatalystData> CatalystData::FromParams(CatalystParams &params) {
   for (auto t :
        {Identity, ReflectAcrossX, ReflectAcrossYeqX, ReflectAcrossY,
         ReflectAcrossYeqNegXP1, Rotate90, Rotate270, Rotate180OddBoth}) {
-    result.push_back(data.Transformed(t));
+    result.push_back(data->Transformed(t));
   }
 
   return result;
@@ -1411,9 +1435,14 @@ int main(int argc, char *argv[]) {
   std::vector<Configuration> allSolutions;
 
   std::vector<CatalystData> catalystdata;
-  for (auto &c : params.catalysts) {
-    auto newdata = CatalystData::FromParams(c);
-    catalystdata.insert(catalystdata.end(), newdata.begin(), newdata.end()); // Why is C++ like this
+  for (unsigned i = 0; i < params.catalysts.size(); ++i) {
+    std::string error;
+    auto newdata = CatalystData::FromParams(params.catalysts[i], error);
+    if (!newdata) {
+      std::cerr << "Invalid catalyst " << i + 1 << ": " << error << std::endl;
+      return 1;
+    }
+    catalystdata.insert(catalystdata.end(), newdata->begin(), newdata->end()); // Why is C++ like this
   }
 
   unsigned contactRadius = 0;
